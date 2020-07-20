@@ -1,0 +1,9 @@
+{
+  "name": "elm-minithesis",
+  "description": "Elm port of Minithesis",
+  "license": "BSD-3-Clause",
+  "devDependencies": {
+    "elm-review": "^2.2.5",
+    "elm-test": "^0.19.1-revision2"
+  }
+}
