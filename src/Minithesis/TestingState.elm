@@ -242,11 +242,7 @@ shrinkOnce :
     -> TestingState a
     -> Result ( Stop, TestCase ) ( RandomRun, TestingState a )
 shrinkOnce counterexample state =
-    let
-        shrinkCommands =
-            allShrinks counterexample
-    in
-    runShrinkCommands shrinkCommands counterexample state
+    runShrinkCommands (shrinkCommandsFor counterexample) counterexample state
 
 
 runShrinkCommand :
@@ -375,31 +371,31 @@ runShrinkCommands cmds randomRun state =
         cmds
 
 
-allShrinks : RandomRun -> List ShrinkCommand
-allShrinks counterexample =
+shrinkCommandsFor : RandomRun -> List ShrinkCommand
+shrinkCommandsFor counterexample =
     let
         metadata =
             { itemsCount = RandomRun.length counterexample }
     in
     OurExtras.List.fastConcat
-        [ deletionShrinks metadata
-        , zeroShrinks metadata
-        , binarySearchShrinks metadata
+        [ deletionShrinkCommands metadata
+        , zeroShrinkCommands metadata
+        , binarySearchShrinkCommands metadata
         ]
 
 
-deletionShrinks : { itemsCount : Int } -> List ShrinkCommand
-deletionShrinks =
+deletionShrinkCommands : { itemsCount : Int } -> List ShrinkCommand
+deletionShrinkCommands =
     blockShrinks DeleteChunk
 
 
-zeroShrinks : { itemsCount : Int } -> List ShrinkCommand
-zeroShrinks =
+zeroShrinkCommands : { itemsCount : Int } -> List ShrinkCommand
+zeroShrinkCommands =
     blockShrinks ReplaceChunkWithZero
 
 
-binarySearchShrinks : { itemsCount : Int } -> List ShrinkCommand
-binarySearchShrinks { itemsCount } =
+binarySearchShrinkCommands : { itemsCount : Int } -> List ShrinkCommand
+binarySearchShrinkCommands { itemsCount } =
     List.range 0 (itemsCount - 1)
         |> List.reverse
         |> List.map (\index -> MinimizeChoiceWithBinarySearch { index = index })
