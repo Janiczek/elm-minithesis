@@ -1,6 +1,5 @@
 module Minithesis.TestCase exposing
     ( Status(..)
-    , Stop(..)
     , TestCase
     , forRun
     , init
@@ -8,16 +7,8 @@ module Minithesis.TestCase exposing
     )
 
 import Minithesis.RandomRun as RandomRun exposing (RandomRun)
+import Minithesis.Stop exposing (Stop(..))
 import Random
-
-
-type Stop
-    = Frozen -- Attempted to make random choices on a test case that has been completed
-    | StopTest -- Raised when a test should stop executing early
-    | InvalidChoice Int
-    | PrefixNotLongEnough -- shouldn't happen as we're checking the lenghts beforehand
-    | RandomnessNotAllowed -- seed was Nothing but was requested to generate a value
-    | LostCounterexample -- BUG: somehow TestingState.bestCounterexample became Nothing
 
 
 type Status

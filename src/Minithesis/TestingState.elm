@@ -4,14 +4,15 @@ module Minithesis.TestingState exposing
     , generate
     , init
     , shrink
+    , stopIfUnsatisfiable
     )
 
 import Minithesis.Fuzz exposing (Fuzzer)
 import Minithesis.RandomRun as RandomRun exposing (RandomRun)
+import Minithesis.Stop exposing (Stop(..))
 import Minithesis.TestCase as TestCase
     exposing
         ( Status(..)
-        , Stop(..)
         , TestCase
         )
 import OurExtras.List
@@ -178,6 +179,25 @@ markValidIfUndecided testCase =
 
     else
         Ok testCase
+
+
+stopIfUnsatisfiable :
+    Result ( Stop, TestCase ) (TestingState a)
+    -> Result ( Stop, TestCase ) (TestingState a)
+stopIfUnsatisfiable result =
+    case result of
+        Err err ->
+            result
+
+        Ok state ->
+            if state.validTestCases == 0 then
+                Err
+                    ( Unsatisfiable
+                    , TestCase.forRun (Maybe.withDefault RandomRun.empty state.bestCounterexample)
+                    )
+
+            else
+                result
 
 
 shrink :

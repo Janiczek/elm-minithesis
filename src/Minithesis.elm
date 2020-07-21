@@ -9,11 +9,8 @@ module Minithesis exposing
     )
 
 import Minithesis.Fuzz as Fuzz exposing (Fuzzer)
-import Minithesis.TestCase as TestCase
-    exposing
-        ( Status(..)
-        , Stop
-        )
+import Minithesis.Stop exposing (Stop(..))
+import Minithesis.TestCase as TestCase exposing (Status(..))
 import Minithesis.TestingState as TestingState exposing (TestingState)
 import Random
 
@@ -77,6 +74,7 @@ runState state =
     case
         Ok state
             |> TestingState.generate
+            |> TestingState.stopIfUnsatisfiable
             |> TestingState.shrink
     of
         Err ( stop, _ ) ->

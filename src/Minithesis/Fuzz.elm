@@ -4,6 +4,7 @@ module Minithesis.Fuzz exposing
     , andThen
     , bool
     , constant
+    , filter
     , map
     , map2
     , nonnegativeInt
@@ -12,10 +13,10 @@ module Minithesis.Fuzz exposing
     )
 
 import Minithesis.RandomRun as RandomRun
+import Minithesis.Stop exposing (Stop(..))
 import Minithesis.TestCase as TestCase
     exposing
         ( Status(..)
-        , Stop(..)
         , TestCase
         )
 import Random
@@ -215,5 +216,22 @@ andThen fn (Fuzzer fuzzer) =
                                 fn value
                         in
                         newFuzzer newTestCase
+                    )
+        )
+
+
+filter : (a -> Bool) -> Fuzzer a -> Fuzzer a
+filter fn (Fuzzer fuzzer) =
+    Fuzzer
+        (\testCase ->
+            fuzzer testCase
+                |> Result.andThen
+                    (\( value, newTestCase ) ->
+                        if fn value then
+                            Ok ( value, newTestCase )
+
+                        else
+                            newTestCase
+                                |> TestCase.markStatus Invalid
                     )
         )
