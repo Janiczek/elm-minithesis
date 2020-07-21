@@ -8,6 +8,7 @@ module Minithesis.Fuzz exposing
     , map
     , map2
     , nonnegativeInt
+    , nonnegativeIntFromTo
     , run
     , weightedBool
     )
@@ -166,6 +167,16 @@ toBool int =
 bool : Fuzzer Bool
 bool =
     weightedBool 0.5
+
+
+nonnegativeIntFromTo : Int -> Int -> Fuzzer Int
+nonnegativeIntFromTo from to =
+    if from > to then
+        nonnegativeIntFromTo to from
+
+    else
+        nonnegativeInt (to - from)
+            |> map (\n -> n + from)
 
 
 

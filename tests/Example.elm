@@ -1,4 +1,4 @@
-module Minithesis.Example exposing (..)
+module Example exposing (..)
 
 import Expect exposing (Expectation)
 import Fuzz
@@ -16,7 +16,7 @@ listOfIntegers =
                 |> Minithesis.Fuzz.andThen
                     (\coin ->
                         if coin then
-                            Minithesis.Fuzz.nonnegativeInt 10000
+                            Minithesis.Fuzz.nonnegativeIntFromTo 1001 10000
                                 |> Minithesis.Fuzz.andThen (\int -> go (int :: acc))
 
                         else

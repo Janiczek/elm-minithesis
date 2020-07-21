@@ -30,7 +30,7 @@ its values satisfy the invariants out of the box even if using `andThen`!
 
 ## Usage
 
-`tests/Minithesis/Example.elm` is a pretty nice example of how the API looks.
+`tests/Example.elm` is a pretty nice example of how the API looks.
 Here is an abridged version:
 
 ```elm
