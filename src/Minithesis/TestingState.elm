@@ -116,8 +116,8 @@ runTest :
     -> Result ( Stop, TestCase ) ( TestingState a, TestCase )
 runTest testCase state =
     let
-        go : TestCase -> TestingState a
-        go testCase_ =
+        toNewState : TestCase -> TestingState a
+        toNewState testCase_ =
             { state
                 | calls = state.calls + 1
                 , validTestCases =
@@ -151,19 +151,23 @@ runTest testCase state =
                         |> Maybe.withDefault state.seed
             }
     in
-    case
-        testCase
-            |> state.userTestFn
-            |> Result.andThen markValidIfUndecided
-    of
-        Ok testCase_ ->
-            Ok ( go testCase_, testCase_ )
+    if state.bestCounterexample == Just testCase.prefix then
+        Ok ( state, testCase )
 
-        Err ( StopTest, testCase_ ) ->
-            Ok ( go testCase_, testCase_ )
+    else
+        case
+            testCase
+                |> state.userTestFn
+                |> Result.andThen markValidIfUndecided
+        of
+            Ok testCase_ ->
+                Ok ( toNewState testCase_, testCase_ )
 
-        Err otherErr ->
-            Err otherErr
+            Err ( StopTest, testCase_ ) ->
+                Ok ( toNewState testCase_, testCase_ )
+
+            Err otherErr ->
+                Err otherErr
 
 
 markValidIfUndecided : TestCase -> Result ( Stop, TestCase ) TestCase
