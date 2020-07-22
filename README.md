@@ -46,7 +46,7 @@ listOfIntegers =
                 |> Fuzz.andThen
                     (\coin ->
                         if coin then
-                            Fuzz.nonnegativeInt 10000
+                            Fuzz.nonnegativeIntFromTo 1001 10000
                                 |> Fuzz.andThen (\int -> go (int :: acc))
 
                         else
@@ -63,7 +63,7 @@ findsSmallList =
             List.sum fuzzedList <= 1000
 
 
-{-| Almost surely will be: `FailsWith [1001]`
+{-| Will fail and shrink to the minimal example: `FailsWith [1001]`
 -}
 minithesisTestResult : Int -> TestResult (List Int)
 minithesisTestResult seed =
