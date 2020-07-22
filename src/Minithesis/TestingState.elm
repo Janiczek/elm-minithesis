@@ -118,12 +118,16 @@ runTest :
 runTest testCase state =
     let
         toNewState : TestCase -> TestingState a
-        toNewState testCase_ =
+        toNewState testCase0 =
+            let
+                testCase1 =
+                    markValidIfUndecided testCase0
+            in
             { state
                 | calls = state.calls + 1
                 , validTestCases =
                     if
-                        List.member testCase_.status
+                        List.member testCase1.status
                             [ Valid
                             , Interesting
                             ]
@@ -133,14 +137,14 @@ runTest testCase state =
                     else
                         state.validTestCases
                 , bestCounterexample =
-                    if testCase_.status == Interesting then
+                    if testCase1.status == Interesting then
                         case state.bestCounterexample of
                             Nothing ->
-                                Just testCase_.randomRun
+                                Just testCase1.randomRun
 
                             Just bestCounterexample ->
-                                if RandomRun.compare testCase_.randomRun bestCounterexample == LT then
-                                    Just testCase_.randomRun
+                                if RandomRun.compare testCase1.randomRun bestCounterexample == LT then
+                                    Just testCase1.randomRun
 
                                 else
                                     state.bestCounterexample
@@ -148,7 +152,7 @@ runTest testCase state =
                     else
                         state.bestCounterexample
                 , seed =
-                    testCase_.seed
+                    testCase1.seed
                         |> Maybe.withDefault state.seed
             }
     in
@@ -159,7 +163,6 @@ runTest testCase state =
         case
             testCase
                 |> state.userTestFn
-                |> Result.andThen markValidIfUndecided
         of
             Ok testCase_ ->
                 Ok ( toNewState testCase_, testCase_ )
@@ -171,14 +174,13 @@ runTest testCase state =
                 Err otherErr
 
 
-markValidIfUndecided : TestCase -> Result ( Stop, TestCase ) TestCase
+markValidIfUndecided : TestCase -> TestCase
 markValidIfUndecided testCase =
     if testCase.status == Undecided then
-        testCase
-            |> TestCase.markStatus Valid
+        { testCase | status = Valid }
 
     else
-        Ok testCase
+        testCase
 
 
 stopIfUnsatisfiable :
@@ -211,7 +213,11 @@ shrink result =
                     result
 
                 Just counterexample ->
-                    Ok <| iterateShrinkWhileProgress counterexample state
+                    if RandomRun.isEmpty counterexample then
+                        result
+
+                    else
+                        Ok <| iterateShrinkWhileProgress counterexample state
 
         Err _ ->
             result

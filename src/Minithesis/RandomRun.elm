@@ -5,6 +5,7 @@ module Minithesis.RandomRun exposing
     , deleteChunk
     , empty
     , get
+    , isEmpty
     , length
     , replaceChunkWithZero
     , set
@@ -20,6 +21,11 @@ type alias RandomRun =
 empty : RandomRun
 empty =
     Array.empty
+
+
+isEmpty : RandomRun -> Bool
+isEmpty run =
+    Array.isEmpty run
 
 
 {-| Returns a key that can be used for the shrinking order of test cases.

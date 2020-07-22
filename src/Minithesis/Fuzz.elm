@@ -95,18 +95,19 @@ makeChoice n generator testCase =
                 |> Result.mapError (\stop -> ( stop, testCase ))
                 |> Result.andThen
                     (\( result, newSeed ) ->
+                        let
+                            newTestCase =
+                                { testCase
+                                    | seed = newSeed
+                                    , randomRun = RandomRun.append result testCase.randomRun
+                                }
+                        in
                         if result > n then
-                            { testCase | seed = newSeed }
+                            newTestCase
                                 |> TestCase.markStatus Invalid
 
                         else
-                            Ok
-                                ( result
-                                , { testCase
-                                    | seed = newSeed
-                                    , randomRun = RandomRun.append result testCase.randomRun
-                                  }
-                                )
+                            Ok ( result, newTestCase )
                     )
 
 
