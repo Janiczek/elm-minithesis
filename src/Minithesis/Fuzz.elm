@@ -2,14 +2,21 @@ module Minithesis.Fuzz exposing
     ( Fuzzer
     , andMap
     , andThen
+    , anyInt
     , bool
     , constant
     , filter
+    , int
+    , list
     , map
     , map2
-    , nonnegativeInt
-    , nonnegativeIntFromTo
+    , map3
+    , oneOf
+    , oneOfValues
+    , reject
     , run
+    , tuple
+    , tuple3
     , weightedBool
     )
 
@@ -115,7 +122,7 @@ makeChoice n generator testCase =
 -- 2) BUILDING BLOCKS
 
 
-{-| Returns a number in the range [0, n]
+{-| Returns a number in the range [0, n] (inclusive).
 -}
 nonnegativeInt : Int -> Fuzzer Int
 nonnegativeInt n =
@@ -152,8 +159,8 @@ weightedBoolGenerator p =
 
 
 toBool : Int -> Bool
-toBool int =
-    case int of
+toBool int_ =
+    case int_ of
         0 ->
             False
 
@@ -170,23 +177,99 @@ bool =
     weightedBool 0.5
 
 
-nonnegativeIntFromTo : Int -> Int -> Fuzzer Int
-nonnegativeIntFromTo from to =
+{-| Returns a number in the range [from, to] (inclusive).
+
+The range of supported values is (Random.minInt, Random.maxInt):
+
+    MFuzz.int -2147483648 2147483647
+
+-}
+int : Int -> Int -> Fuzzer Int
+int from to =
     if from > to then
-        nonnegativeIntFromTo to from
+        int to from
 
     else
         nonnegativeInt (to - from)
             |> map (\n -> n + from)
 
 
+anyInt : Fuzzer Int
+anyInt =
+    int Random.minInt Random.maxInt
 
--- 4) HELPERS
+
+list : Fuzzer a -> Fuzzer (List a)
+list item =
+    let
+        go : List a -> Fuzzer (List a)
+        go acc =
+            weightedBool 0.9
+                |> andThen
+                    (\coin ->
+                        if coin then
+                            item |> andThen (\x -> go (x :: acc))
+
+                        else
+                            constant acc
+                    )
+    in
+    go []
+
+
+tuple : ( Fuzzer a, Fuzzer b ) -> Fuzzer ( a, b )
+tuple ( a, b ) =
+    map2 Tuple.pair a b
+
+
+tuple3 : ( Fuzzer a, Fuzzer b, Fuzzer c ) -> Fuzzer ( a, b, c )
+tuple3 ( a, b, c ) =
+    map3 (\ax bx cx -> ( ax, bx, cx )) a b c
 
 
 constant : a -> Fuzzer a
 constant a =
     Fuzzer (\testCase -> Ok ( a, testCase ))
+
+
+oneOfValues : List a -> Fuzzer a
+oneOfValues constants =
+    case List.length constants of
+        0 ->
+            reject
+
+        length ->
+            nonnegativeInt (length - 1)
+                |> andThen
+                    (\chosenValueIndex ->
+                        case constants |> List.drop chosenValueIndex |> List.head of
+                            Nothing ->
+                                -- shouldn't happen
+                                reject
+
+                            Just chosenValue ->
+                                constant chosenValue
+                    )
+
+
+oneOf : List (Fuzzer a) -> Fuzzer a
+oneOf fuzzers =
+    case List.length fuzzers of
+        0 ->
+            reject
+
+        length ->
+            nonnegativeInt (length - 1)
+                |> andThen
+                    (\chosenFuzzerIndex ->
+                        case fuzzers |> List.drop chosenFuzzerIndex |> List.head of
+                            Nothing ->
+                                -- shouldn't happen
+                                reject
+
+                            Just chosenFuzzer ->
+                                chosenFuzzer
+                    )
 
 
 map : (a -> b) -> Fuzzer a -> Fuzzer b
@@ -211,6 +294,14 @@ map2 fn (Fuzzer fuzzerA) (Fuzzer fuzzerB) =
         )
 
 
+map3 : (a -> b -> c -> d) -> Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer d
+map3 fn a b c =
+    constant fn
+        |> andMap a
+        |> andMap b
+        |> andMap c
+
+
 andMap : Fuzzer a -> Fuzzer (a -> b) -> Fuzzer b
 andMap =
     map2 (|>)
@@ -230,6 +321,11 @@ andThen fn (Fuzzer fuzzer) =
                         newFuzzer newTestCase
                     )
         )
+
+
+reject : Fuzzer a
+reject =
+    Fuzzer (TestCase.markStatus Invalid)
 
 
 filter : (a -> Bool) -> Fuzzer a -> Fuzzer a

@@ -39,21 +39,7 @@ import Minithesis exposing (Test, TestResult)
 
 listOfIntegers : Fuzzer (List Int)
 listOfIntegers =
-    let
-        go : List Int -> Fuzzer (List Int)
-        go acc =
-            Fuzz.weightedBool 0.9
-                |> Fuzz.andThen
-                    (\coin ->
-                        if coin then
-                            Fuzz.nonnegativeIntFromTo 1001 10000
-                                |> Fuzz.andThen (\int -> go (int :: acc))
-
-                        else
-                            Fuzz.constant acc
-                    )
-    in
-    go []
+    Fuzz.list (Fuzz.int 1001 10000)
 
 
 findsSmallList : Test (List Int)
