@@ -273,8 +273,8 @@ runShrinkCommand cmd randomRun state =
             RandomRun.get index randomRun
                 |> Maybe.map
                     (\value ->
-                        loopShrink
-                            (binarySearch (\newValue run -> RandomRun.set index newValue run))
+                        binarySearch
+                            (\newValue run -> RandomRun.set index newValue run)
                             { low = 0
                             , high = value
                             }
@@ -303,15 +303,13 @@ runShrinkCommand cmd randomRun state =
                         |> Result.andThen
                             (\( state_, testCase ) ->
                                 if meta.rightIndex < RandomRun.length newRun && newLeft > 0 then
-                                    loopShrink
-                                        (binarySearch
-                                            (\newValue run ->
-                                                RandomRun.replace
-                                                    [ ( meta.leftIndex, newValue )
-                                                    , ( meta.rightIndex, newRight + newLeft - newValue )
-                                                    ]
-                                                    run
-                                            )
+                                    binarySearch
+                                        (\newValue run ->
+                                            RandomRun.replace
+                                                [ ( meta.leftIndex, newValue )
+                                                , ( meta.rightIndex, newRight + newLeft - newValue )
+                                                ]
+                                                run
                                         )
                                         { low = 0
                                         , high = newLeft
@@ -342,11 +340,11 @@ loopShrink shrinkFn loopState randomRun state =
                 Err err ->
                     Err err
 
-                Ok ( nextState, nextTestCase ) ->
+                Ok ( nextState, testCase ) ->
                     let
                         isInteresting : Bool
                         isInteresting =
-                            nextTestCase.status == Interesting
+                            testCase.status == Interesting
                     in
                     loopShrink shrinkFn (toLoopState isInteresting) nextRandomRun nextState
 
@@ -360,8 +358,41 @@ type alias BinarySearchState =
     }
 
 
-binarySearch : (Int -> RandomRun -> RandomRun) -> BinarySearchState -> RandomRun -> Loop BinarySearchState
-binarySearch updateRun ({ low, high } as state) randomRun =
+binarySearch :
+    (Int -> RandomRun -> RandomRun)
+    -> BinarySearchState
+    -> RandomRun
+    -> TestingState a
+    -> Result ( Stop, TestCase ) ( TestingState a, TestCase )
+binarySearch updateRun binarySearchState run state =
+    let
+        runWithLow =
+            updateRun binarySearchState.low run
+    in
+    case runTest (TestCase.forRun runWithLow) state of
+        Err err ->
+            Err err
+
+        Ok ( nextState, testCase ) ->
+            let
+                isInteresting : Bool
+                isInteresting =
+                    testCase.status == Interesting
+            in
+            if isInteresting then
+                -- this is the best we could have hoped for
+                Ok ( nextState, testCase )
+
+            else
+                loopShrink
+                    (binarySearchLoop updateRun)
+                    binarySearchState
+                    run
+                    nextState
+
+
+binarySearchLoop : (Int -> RandomRun -> RandomRun) -> BinarySearchState -> RandomRun -> Loop BinarySearchState
+binarySearchLoop updateRun ({ low, high } as state) randomRun =
     if low + 1 < high then
         let
             mid =
