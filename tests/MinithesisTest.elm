@@ -5,6 +5,7 @@ import Fuzz
 import Minithesis exposing (TestResult(..))
 import Minithesis.Fuzz as MFuzz exposing (Fuzzer)
 import Minithesis.Stop exposing (Stop(..))
+import Set
 import Test
 
 
@@ -154,6 +155,30 @@ suite =
                 )
                 (\( length, list ) -> List.length list == length)
                 Passes
+            ]
+        , Test.describe "uniqueList"
+            [ testMinithesis "elements are unique"
+                (MFuzz.uniqueList MFuzz.anyInt)
+                (\list -> Set.size (Set.fromList list) == List.length list)
+                Passes
+            ]
+        , Test.describe "uniqueListOfLength"
+            [ testMinithesis "always the specified length"
+                (MFuzz.int 0 10
+                    |> MFuzz.andThen
+                        (\length ->
+                            MFuzz.tuple
+                                ( MFuzz.constant length
+                                , MFuzz.uniqueListOfLength length MFuzz.anyInt
+                                )
+                        )
+                )
+                (\( length, list ) -> List.length list == length)
+                Passes
+            , testMinithesis "unsatisfiable"
+                (MFuzz.uniqueListOfLength 5 (MFuzz.int 1 3))
+                (\_ -> True)
+                (Error Unsatisfiable)
             ]
         , Test.describe "shrinkers"
             [ testMinithesis "Reduces additive pairs"

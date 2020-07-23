@@ -19,6 +19,12 @@ module Minithesis.Fuzz exposing
     , run
     , tuple
     , tuple3
+    , uniqueByList
+    , uniqueByListOfLength
+    , uniqueByListWith
+    , uniqueList
+    , uniqueListOfLength
+    , uniqueListWith
     , unit
     , weightedBool
     )
@@ -31,6 +37,7 @@ import Minithesis.TestCase as TestCase
         , TestCase
         )
 import Random
+import Set exposing (Set)
 
 
 
@@ -239,6 +246,15 @@ anyInt =
     int Random.minInt Random.maxInt
 
 
+convertRange :
+    { minLength : Maybe Int, maxLength : Maybe Int }
+    -> { minLength : Int, maxLength : Int }
+convertRange { minLength, maxLength } =
+    { minLength = Maybe.withDefault 0 minLength
+    , maxLength = Maybe.withDefault (round (1 / 0)) maxLength
+    }
+
+
 list : Fuzzer a -> Fuzzer (List a)
 list item =
     listWith
@@ -257,47 +273,140 @@ listOfLength length item =
         item
 
 
-listWith : { minLength : Maybe Int, maxLength : Maybe Int } -> Fuzzer a -> Fuzzer (List a)
-listWith { minLength, maxLength } item =
+listWith :
+    { minLength : Maybe Int, maxLength : Maybe Int }
+    -> Fuzzer a
+    -> Fuzzer (List a)
+listWith range itemFuzzer =
     let
-        minLength_ : Int
-        minLength_ =
-            Maybe.withDefault 0 minLength
-
-        intInfinity : Int
-        intInfinity =
-            round (1 / 0)
-
-        maxLength_ : Int
-        maxLength_ =
-            Maybe.withDefault intInfinity maxLength
+        { minLength, maxLength } =
+            convertRange range
 
         addItem : Int -> List a -> Fuzzer (List a)
         addItem accLength accList =
-            item |> andThen (\x -> go (accLength + 1) (x :: accList))
+            itemFuzzer
+                |> andThen
+                    (\item ->
+                        go (accLength + 1) (item :: accList)
+                    )
 
         go : Int -> List a -> Fuzzer (List a)
-        go accLength accList =
-            if accLength < minLength_ then
+        go length acc =
+            if length < minLength then
                 forcedChoice 1
-                    |> andThen (\_ -> addItem accLength accList)
+                    |> andThen (\_ -> addItem length acc)
 
-            else if accLength + 1 >= maxLength_ then
+            else if length + 1 >= maxLength then
                 forcedChoice 0
-                    |> andThen (\_ -> constant (List.reverse accList))
+                    |> andThen (\_ -> constant (List.reverse acc))
 
             else
                 weightedBool 0.9
                     |> andThen
                         (\coin ->
                             if coin then
-                                addItem accLength accList
+                                addItem length acc
 
                             else
-                                constant (List.reverse accList)
+                                constant (List.reverse acc)
                         )
     in
     go 0 []
+
+
+uniqueList : Fuzzer comparable -> Fuzzer (List comparable)
+uniqueList item =
+    uniqueListWith
+        { minLength = Nothing
+        , maxLength = Nothing
+        }
+        item
+
+
+uniqueListOfLength : Int -> Fuzzer comparable -> Fuzzer (List comparable)
+uniqueListOfLength length item =
+    uniqueListWith
+        { minLength = Just length
+        , maxLength = Just length
+        }
+        item
+
+
+uniqueListWith :
+    { minLength : Maybe Int, maxLength : Maybe Int }
+    -> Fuzzer comparable
+    -> Fuzzer (List comparable)
+uniqueListWith range item =
+    uniqueByListWith
+        identity
+        range
+        item
+
+
+uniqueByList : (a -> comparable) -> Fuzzer a -> Fuzzer (List a)
+uniqueByList toComparable item =
+    uniqueByListWith
+        toComparable
+        { minLength = Nothing
+        , maxLength = Nothing
+        }
+        item
+
+
+uniqueByListOfLength : Int -> (a -> comparable) -> Fuzzer a -> Fuzzer (List a)
+uniqueByListOfLength length toComparable item =
+    uniqueByListWith
+        toComparable
+        { minLength = Just length
+        , maxLength = Just length
+        }
+        item
+
+
+uniqueByListWith :
+    (a -> comparable)
+    -> { minLength : Maybe Int, maxLength : Maybe Int }
+    -> Fuzzer a
+    -> Fuzzer (List a)
+uniqueByListWith toComparable range itemFuzzer =
+    let
+        { minLength, maxLength } =
+            convertRange range
+
+        addItem : Set comparable -> Int -> List a -> Fuzzer (List a)
+        addItem seen length acc =
+            itemFuzzer
+                |> filter (\item -> not <| Set.member (toComparable item) seen)
+                |> andThen
+                    (\item ->
+                        go
+                            (Set.insert (toComparable item) seen)
+                            (length + 1)
+                            (item :: acc)
+                    )
+
+        go : Set comparable -> Int -> List a -> Fuzzer (List a)
+        go seen length acc =
+            if length < minLength then
+                forcedChoice 1
+                    |> andThen (\_ -> addItem seen length acc)
+
+            else if length + 1 >= maxLength then
+                forcedChoice 0
+                    |> andThen (\_ -> constant (List.reverse acc))
+
+            else
+                weightedBool 0.9
+                    |> andThen
+                        (\coin ->
+                            if coin then
+                                addItem seen length acc
+
+                            else
+                                constant (List.reverse acc)
+                        )
+    in
+    go Set.empty 0 []
 
 
 tuple : ( Fuzzer a, Fuzzer b ) -> Fuzzer ( a, b )
@@ -412,20 +521,19 @@ reject =
 
 
 filter : (a -> Bool) -> Fuzzer a -> Fuzzer a
-filter fn (Fuzzer fuzzer) =
-    Fuzzer
-        (\testCase ->
-            fuzzer testCase
-                |> Result.andThen
-                    (\( value, newTestCase ) ->
-                        if fn value then
-                            Ok ( value, newTestCase )
+filter fn fuzzer =
+    {- TODO Hypothesis tries three times - and what then? Does it sidestep the
+       TestingState counters for when to stop generating/shrinking?
+    -}
+    fuzzer
+        |> andThen
+            (\item ->
+                if fn item then
+                    constant item
 
-                        else
-                            newTestCase
-                                |> TestCase.markStatus Invalid
-                    )
-        )
+                else
+                    reject
+            )
 
 
 unit : Fuzzer ()
