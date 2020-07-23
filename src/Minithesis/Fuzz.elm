@@ -284,7 +284,7 @@ listWith { minLength, maxLength } item =
 
             else if accLength + 1 >= maxLength_ then
                 forcedChoice 0
-                    |> andThen (\_ -> constant accList)
+                    |> andThen (\_ -> constant (List.reverse accList))
 
             else
                 weightedBool 0.9
@@ -294,7 +294,7 @@ listWith { minLength, maxLength } item =
                                 addItem accLength accList
 
                             else
-                                constant accList
+                                constant (List.reverse accList)
                         )
     in
     go 0 []

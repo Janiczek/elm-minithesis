@@ -457,7 +457,7 @@ sortShrinkCommands itemsCount =
     blockShrinks
         SortChunk
         { itemsCount = itemsCount
-        , allowChunksOfSize1 = False -- doesn't make sense for shrinking
+        , allowChunksOfSize1 = False -- doesn't make sense for sorting
         }
 
 
