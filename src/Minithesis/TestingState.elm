@@ -299,21 +299,25 @@ runShrinkCommand cmd randomRun state =
                     runTest (TestCase.forRun newRun) state
                         |> Result.andThen
                             (\( state_, testCase ) ->
-                                loopShrink
-                                    (binarySearch
-                                        (\newValue run ->
-                                            RandomRun.replace
-                                                [ ( meta.leftIndex, newValue )
-                                                , ( meta.rightIndex, newRight + newLeft - newValue )
-                                                ]
-                                                run
+                                if meta.rightIndex < RandomRun.length newRun && newLeft > 0 then
+                                    loopShrink
+                                        (binarySearch
+                                            (\newValue run ->
+                                                RandomRun.replace
+                                                    [ ( meta.leftIndex, newValue )
+                                                    , ( meta.rightIndex, newRight + newLeft - newValue )
+                                                    ]
+                                                    run
+                                            )
                                         )
-                                    )
-                                    { low = 0
-                                    , high = newLeft
-                                    }
-                                    newRun
-                                    state_
+                                        { low = 0
+                                        , high = newLeft
+                                        }
+                                        newRun
+                                        state_
+
+                                else
+                                    Ok ( state_, testCase )
                             )
 
 

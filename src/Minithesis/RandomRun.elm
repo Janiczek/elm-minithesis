@@ -89,10 +89,21 @@ replaceChunkWithZero { chunkSize, startIndex } run =
 
 replace : List ( Int, Int ) -> RandomRun -> RandomRun
 replace replacements run =
-    List.foldl
-        (\( i, value ) acc -> Array.set i value acc)
+    let
+        runLength =
+            Array.length run
+
+        isDoable =
+            List.all (\( i, _ ) -> i < runLength) replacements
+    in
+    if isDoable then
+        List.foldl
+            (\( i, value ) acc -> Array.set i value acc)
+            run
+            replacements
+
+    else
         run
-        replacements
 
 
 sortChunk : { chunkSize : Int, startIndex : Int } -> RandomRun -> RandomRun
