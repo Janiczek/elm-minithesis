@@ -126,12 +126,7 @@ runTest testCase state =
             { state
                 | calls = state.calls + 1
                 , validTestCases =
-                    if
-                        List.member testCase1.status
-                            [ Valid
-                            , Interesting
-                            ]
-                    then
+                    if List.member testCase1.status [ Valid, Interesting ] then
                         state.validTestCases + 1
 
                     else
@@ -160,10 +155,7 @@ runTest testCase state =
         Ok ( state, testCase )
 
     else
-        case
-            testCase
-                |> state.userTestFn
-        of
+        case state.userTestFn testCase of
             Ok testCase_ ->
                 Ok ( toNewState testCase_, testCase_ )
 
@@ -241,6 +233,8 @@ type ShrinkCommand
     = DeleteChunk { chunkSize : Int, startIndex : Int }
     | ReplaceChunkWithZero { chunkSize : Int, startIndex : Int }
     | MinimizeChoiceWithBinarySearch { index : Int }
+    | SortChunk { chunkSize : Int, startIndex : Int }
+    | RedistributeChoices { leftIndex : Int, rightIndex : Int }
 
 
 shrinkOnce :
@@ -277,15 +271,50 @@ runShrinkCommand cmd randomRun state =
                 |> Maybe.map
                     (\value ->
                         loopShrink
-                            binarySearch
+                            (binarySearch (\newValue run -> RandomRun.set index newValue run))
                             { low = 0
                             , high = value
-                            , index = index
                             }
                             randomRun
                             state
                     )
                 |> Maybe.withDefault (Ok ( state, testCase ))
+
+        SortChunk meta ->
+            runTest
+                (TestCase.forRun (RandomRun.sortChunk meta randomRun))
+                state
+
+        RedistributeChoices meta ->
+            {- First we try swapping them if left > right.
+
+               Then we try to (binary-search) minimize the left while keeping the
+               sum constant (so what we subtract from left we add to right).
+            -}
+            case RandomRun.swapIfOutOfOrder meta randomRun of
+                Nothing ->
+                    Ok ( state, TestCase.forRun randomRun )
+
+                Just { newRun, newLeft, newRight } ->
+                    runTest (TestCase.forRun newRun) state
+                        |> Result.andThen
+                            (\( state_, testCase ) ->
+                                loopShrink
+                                    (binarySearch
+                                        (\newValue run ->
+                                            RandomRun.replace
+                                                [ ( meta.leftIndex, newValue )
+                                                , ( meta.rightIndex, newRight + newLeft - newValue )
+                                                ]
+                                                run
+                                        )
+                                    )
+                                    { low = 0
+                                    , high = newLeft
+                                    }
+                                    newRun
+                                    state_
+                            )
 
 
 type Loop a
@@ -319,21 +348,20 @@ loopShrink shrinkFn loopState randomRun state =
 
 
 type alias BinarySearchState =
-    { index : Int
-    , low : Int
+    { low : Int
     , high : Int
     }
 
 
-binarySearch : BinarySearchState -> RandomRun -> Loop BinarySearchState
-binarySearch ({ index, low, high } as state) randomRun =
+binarySearch : (Int -> RandomRun -> RandomRun) -> BinarySearchState -> RandomRun -> Loop BinarySearchState
+binarySearch updateRun ({ low, high } as state) randomRun =
     if low + 1 < high then
         let
             mid =
                 low + (high - low) // 2
 
             newRandomRun =
-                RandomRun.set index mid randomRun
+                updateRun mid randomRun
         in
         TryThisNext
             newRandomRun
@@ -380,31 +408,72 @@ runShrinkCommands cmds randomRun state =
 shrinkCommandsFor : RandomRun -> List ShrinkCommand
 shrinkCommandsFor counterexample =
     let
-        metadata =
-            { itemsCount = RandomRun.length counterexample }
+        itemsCount =
+            RandomRun.length counterexample
     in
     OurExtras.List.fastConcat
-        [ deletionShrinkCommands metadata
-        , zeroShrinkCommands metadata
-        , binarySearchShrinkCommands metadata
+        [ deletionShrinkCommands itemsCount
+        , zeroShrinkCommands itemsCount
+        , binarySearchShrinkCommands itemsCount
+        , sortShrinkCommands itemsCount
+        , redistributeShrinkCommands itemsCount
         ]
 
 
-deletionShrinkCommands : { itemsCount : Int } -> List ShrinkCommand
-deletionShrinkCommands =
-    blockShrinks DeleteChunk
+deletionShrinkCommands : Int -> List ShrinkCommand
+deletionShrinkCommands itemsCount =
+    blockShrinks
+        DeleteChunk
+        { itemsCount = itemsCount
+        , allowChunksOfSize1 = True
+        }
 
 
-zeroShrinkCommands : { itemsCount : Int } -> List ShrinkCommand
-zeroShrinkCommands =
-    blockShrinks ReplaceChunkWithZero
+zeroShrinkCommands : Int -> List ShrinkCommand
+zeroShrinkCommands itemsCount =
+    blockShrinks
+        ReplaceChunkWithZero
+        { itemsCount = itemsCount
+        , allowChunksOfSize1 = False -- already happens in binary search shrinking
+        }
 
 
-binarySearchShrinkCommands : { itemsCount : Int } -> List ShrinkCommand
-binarySearchShrinkCommands { itemsCount } =
+binarySearchShrinkCommands : Int -> List ShrinkCommand
+binarySearchShrinkCommands itemsCount =
     List.range 0 (itemsCount - 1)
         |> List.reverse
         |> List.map (\index -> MinimizeChoiceWithBinarySearch { index = index })
+
+
+sortShrinkCommands : Int -> List ShrinkCommand
+sortShrinkCommands itemsCount =
+    blockShrinks
+        SortChunk
+        { itemsCount = itemsCount
+        , allowChunksOfSize1 = False -- doesn't make sense for shrinking
+        }
+
+
+redistributeShrinkCommands : Int -> List ShrinkCommand
+redistributeShrinkCommands itemsCount =
+    let
+        forOffset : Int -> List ShrinkCommand
+        forOffset offset =
+            if offset >= itemsCount then
+                []
+
+            else
+                List.range 0 (itemsCount - 1 - offset)
+                    |> List.reverse
+                    |> List.map
+                        (\leftIndex ->
+                            RedistributeChoices
+                                { leftIndex = leftIndex
+                                , rightIndex = leftIndex + offset
+                                }
+                        )
+    in
+    forOffset 2 ++ forOffset 1
 
 
 {-| Not entirely an exact port of the Python Minithesis behaviour,
@@ -412,7 +481,7 @@ eg. it doesn't retry deleting at the same index after deleting a chunk.
 
     blockShrinks
         DeleteChunk
-        { itemsCount = 10 }
+        { itemsCount = 10, allowChunksOfSize1 = False }
         -->
         [ -- Chunks of size 8
           DeleteChunk { chunkSize = 8, startIndex = 2 }
@@ -432,19 +501,23 @@ eg. it doesn't retry deleting at the same index after deleting a chunk.
         , -- ...
           DeleteChunk { chunkSize = 2, startIndex = 1 }
         , DeleteChunk { chunkSize = 2, startIndex = 0 }
-
-        -- Chunks of size 1
-        , DeleteChunk { chunkSize = 1, startIndex = 9 }
-        , DeleteChunk { chunkSize = 1, startIndex = 8 }
-        , -- ...
-          DeleteChunk { chunkSize = 1, startIndex = 1 }
-        , DeleteChunk { chunkSize = 1, startIndex = 0 }
         ]
 
 -}
-blockShrinks : ({ chunkSize : Int, startIndex : Int } -> a) -> { itemsCount : Int } -> List a
-blockShrinks toShrink { itemsCount } =
+blockShrinks :
+    ({ chunkSize : Int, startIndex : Int } -> a)
+    -> { itemsCount : Int, allowChunksOfSize1 : Bool }
+    -> List a
+blockShrinks toShrink { itemsCount, allowChunksOfSize1 } =
     let
+        initChunkSize : Int
+        initChunkSize =
+            if allowChunksOfSize1 then
+                1
+
+            else
+                2
+
         go : Int -> Int -> List a -> List a
         go chunkSize startIndex acc =
             if startIndex > itemsCount - chunkSize then
@@ -464,4 +537,4 @@ blockShrinks toShrink { itemsCount } =
                 in
                 go chunkSize (startIndex + 1) (newCommand :: acc)
     in
-    go 1 0 []
+    go initChunkSize 0 []

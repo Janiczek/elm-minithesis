@@ -9,7 +9,7 @@ import Test
 
 listOfIntegers : MF.Fuzzer (List Int)
 listOfIntegers =
-    MF.list (MF.int 1001 10000)
+    MF.list (MF.int 0 10000)
 
 
 findsSmallList : M.Test (List Int)

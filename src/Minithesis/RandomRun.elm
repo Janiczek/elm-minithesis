@@ -7,8 +7,11 @@ module Minithesis.RandomRun exposing
     , get
     , isEmpty
     , length
+    , replace
     , replaceChunkWithZero
     , set
+    , sortChunk
+    , swapIfOutOfOrder
     )
 
 import Array exposing (Array)
@@ -82,3 +85,56 @@ replaceChunkWithZero { chunkSize, startIndex } run =
         )
         -- after
         (Array.slice (startIndex + chunkSize) (Array.length run) run)
+
+
+replace : List ( Int, Int ) -> RandomRun -> RandomRun
+replace replacements run =
+    List.foldl
+        (\( i, value ) acc -> Array.set i value acc)
+        run
+        replacements
+
+
+sortChunk : { chunkSize : Int, startIndex : Int } -> RandomRun -> RandomRun
+sortChunk { chunkSize, startIndex } run =
+    let
+        chunk : Array Int
+        chunk =
+            Array.slice startIndex (startIndex + chunkSize) run
+
+        sortedIndexedChunk : List ( Int, Int )
+        sortedIndexedChunk =
+            chunk
+                |> Array.toList
+                |> List.sort
+                |> List.indexedMap (\i value -> ( startIndex + i, value ))
+    in
+    replace sortedIndexedChunk run
+
+
+swapIfOutOfOrder :
+    { leftIndex : Int, rightIndex : Int }
+    -> RandomRun
+    -> Maybe { newRun : RandomRun, newLeft : Int, newRight : Int }
+swapIfOutOfOrder { leftIndex, rightIndex } run =
+    Maybe.map2
+        (\left right ->
+            if left > right then
+                { newRun =
+                    replace
+                        [ ( leftIndex, right )
+                        , ( rightIndex, left )
+                        ]
+                        run
+                , newLeft = right
+                , newRight = left
+                }
+
+            else
+                { newRun = run
+                , newLeft = left
+                , newRight = right
+                }
+        )
+        (get leftIndex run)
+        (get rightIndex run)

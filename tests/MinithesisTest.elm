@@ -111,6 +111,16 @@ suite =
                 (\( m, n ) -> m <= n && n <= m + 10)
                 Passes
             ]
+        , Test.describe "shrinkers"
+            [ testMinithesis "Reduces additive pairs"
+                (MFuzz.tuple
+                    ( MFuzz.int 0 1000
+                    , MFuzz.int 0 1000
+                    )
+                )
+                (\( m, n ) -> m + n <= 1000)
+                (FailsWith ( 1, 1000 ))
+            ]
         ]
 
 

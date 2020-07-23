@@ -39,7 +39,7 @@ import Minithesis exposing (Test, TestResult)
 
 listOfIntegers : Fuzzer (List Int)
 listOfIntegers =
-    Fuzz.list (Fuzz.int 1001 10000)
+    Fuzz.list (Fuzz.int 0 10000)
 
 
 findsSmallList : Test (List Int)
