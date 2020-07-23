@@ -8,6 +8,8 @@ module Minithesis.Fuzz exposing
     , filter
     , int
     , list
+    , listOfLength
+    , listWith
     , map
     , map2
     , map3
@@ -17,6 +19,7 @@ module Minithesis.Fuzz exposing
     , run
     , tuple
     , tuple3
+    , unit
     , weightedBool
     )
 
@@ -134,15 +137,27 @@ nonnegativeIntGenerator n =
     Random.int 0 n
 
 
-{-| Returns a Bool, with True having chance `p` (0..1)
+{-| Returns a Bool, with True having chance `p` [0..1].
+
+Input probabilities outside the [0..1] range will be clamped to [0..1].
+
 -}
 weightedBool : Float -> Fuzzer Bool
 weightedBool p =
-    Fuzzer
-        (\testCase ->
-            makeChoice 1 (weightedBoolGenerator p) testCase
-                |> Result.map (Tuple.mapFirst toBool)
-        )
+    if p <= 0 then
+        forcedChoice 0
+            |> map toBool
+
+    else if p >= 1 then
+        forcedChoice 1
+            |> map toBool
+
+    else
+        Fuzzer
+            (\testCase ->
+                makeChoice 1 (weightedBoolGenerator p) testCase
+                    |> Result.map (Tuple.mapFirst toBool)
+            )
 
 
 weightedBoolGenerator : Float -> Random.Generator Int
@@ -156,6 +171,31 @@ weightedBoolGenerator p =
                 else
                     0
             )
+
+
+forcedChoice : Int -> Fuzzer Int
+forcedChoice n =
+    Fuzzer
+        (\testCase ->
+            if n < 0 then
+                Err ( InvalidChoice n, testCase )
+
+            else if testCase.status /= Undecided then
+                Err ( Frozen, testCase )
+
+            else if RandomRun.length testCase.randomRun >= testCase.maxSize then
+                testCase
+                    |> TestCase.markStatus Overrun
+
+            else
+                Ok
+                    ( n
+                    , { testCase
+                        | randomRun =
+                            RandomRun.append n testCase.randomRun
+                      }
+                    )
+        )
 
 
 toBool : Int -> Bool
@@ -174,7 +214,7 @@ toBool int_ =
 
 bool : Fuzzer Bool
 bool =
-    weightedBool 0.5
+    oneOfValues [ True, False ]
 
 
 {-| Returns a number in the range [from, to] (inclusive).
@@ -201,20 +241,63 @@ anyInt =
 
 list : Fuzzer a -> Fuzzer (List a)
 list item =
-    let
-        go : List a -> Fuzzer (List a)
-        go acc =
-            weightedBool 0.9
-                |> andThen
-                    (\coin ->
-                        if coin then
-                            item |> andThen (\x -> go (x :: acc))
+    listWith
+        { minLength = Nothing
+        , maxLength = Nothing
+        }
+        item
 
-                        else
-                            constant acc
-                    )
+
+listOfLength : Int -> Fuzzer a -> Fuzzer (List a)
+listOfLength length item =
+    listWith
+        { minLength = Just length
+        , maxLength = Just length
+        }
+        item
+
+
+listWith : { minLength : Maybe Int, maxLength : Maybe Int } -> Fuzzer a -> Fuzzer (List a)
+listWith { minLength, maxLength } item =
+    let
+        minLength_ : Int
+        minLength_ =
+            Maybe.withDefault 0 minLength
+
+        intInfinity : Int
+        intInfinity =
+            round (1 / 0)
+
+        maxLength_ : Int
+        maxLength_ =
+            Maybe.withDefault intInfinity maxLength
+
+        addItem : Int -> List a -> Fuzzer (List a)
+        addItem accLength accList =
+            item |> andThen (\x -> go (accLength + 1) (x :: accList))
+
+        go : Int -> List a -> Fuzzer (List a)
+        go accLength accList =
+            if accLength < minLength_ then
+                forcedChoice 1
+                    |> andThen (\_ -> addItem accLength accList)
+
+            else if accLength + 1 >= maxLength_ then
+                forcedChoice 0
+                    |> andThen (\_ -> constant accList)
+
+            else
+                weightedBool 0.9
+                    |> andThen
+                        (\coin ->
+                            if coin then
+                                addItem accLength accList
+
+                            else
+                                constant accList
+                        )
     in
-    go []
+    go 0 []
 
 
 tuple : ( Fuzzer a, Fuzzer b ) -> Fuzzer ( a, b )
@@ -343,3 +426,8 @@ filter fn (Fuzzer fuzzer) =
                                 |> TestCase.markStatus Invalid
                     )
         )
+
+
+unit : Fuzzer ()
+unit =
+    constant ()

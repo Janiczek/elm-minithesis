@@ -111,6 +111,50 @@ suite =
                 (\( m, n ) -> m <= n && n <= m + 10)
                 Passes
             ]
+        , Test.describe "weightedBool"
+            [ testMinithesis "Always False"
+                (MFuzz.weightedBool 0)
+                (\bool -> not bool)
+                Passes
+            , testMinithesis "Always True"
+                (MFuzz.weightedBool 1)
+                (\bool -> bool)
+                Passes
+            ]
+        , Test.describe "listWith"
+            [ testMinithesis "empty list"
+                (MFuzz.listWith { minLength = Nothing, maxLength = Just 0 } MFuzz.unit)
+                (\list -> List.isEmpty list)
+                Passes
+            , testMinithesis "single item list"
+                (MFuzz.listWith { minLength = Just 1, maxLength = Just 1 } MFuzz.unit)
+                (\list -> List.length list == 1)
+                Passes
+            , testMinithesis "one to three items"
+                (MFuzz.listWith { minLength = Just 1, maxLength = Just 3 } MFuzz.unit)
+                (\list ->
+                    let
+                        length =
+                            List.length list
+                    in
+                    length >= 1 && length <= 3
+                )
+                Passes
+            ]
+        , Test.describe "listOfLength"
+            [ testMinithesis "always the specified length"
+                (MFuzz.int 0 10
+                    |> MFuzz.andThen
+                        (\length ->
+                            MFuzz.tuple
+                                ( MFuzz.constant length
+                                , MFuzz.listOfLength length MFuzz.unit
+                                )
+                        )
+                )
+                (\( length, list ) -> List.length list == length)
+                Passes
+            ]
         , Test.describe "shrinkers"
             [ testMinithesis "Reduces additive pairs"
                 (MFuzz.tuple
