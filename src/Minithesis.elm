@@ -34,12 +34,12 @@ defaultOptions =
     { maxExamples = 100 }
 
 
-run : Int -> Test a -> TestResult a
+run : Int -> Test a -> ( String, TestResult a )
 run seed test_ =
     runWith defaultOptions seed test_
 
 
-runWith : Options -> Int -> Test a -> TestResult a
+runWith : Options -> Int -> Test a -> ( String, TestResult a )
 runWith { maxExamples } seed test_ =
     let
         state =
@@ -51,10 +51,11 @@ runWith { maxExamples } seed test_ =
     runState state
 
 
-test : Fuzzer a -> (a -> Bool) -> Test a
-test fuzzer userTestFn =
+test : String -> Fuzzer a -> (a -> Bool) -> Test a
+test label fuzzer userTestFn =
     TestingState.Test
-        { fuzzer = fuzzer
+        { label = label
+        , fuzzer = fuzzer
         , userTestFn =
             \testCase ->
                 case Fuzz.run fuzzer testCase of
@@ -69,14 +70,15 @@ test fuzzer userTestFn =
         }
 
 
-runState : TestingState a -> TestResult a
+runState : TestingState a -> ( String, TestResult a )
 runState state =
-    case
+    ( state.label
+    , case
         Ok state
             |> TestingState.generate
             |> TestingState.stopIfUnsatisfiable
             |> TestingState.shrink
-    of
+      of
         Err ( stop, _ ) ->
             Error stop
 
@@ -92,3 +94,4 @@ runState state =
 
                         Err ( stop, _ ) ->
                             Error stop
+    )

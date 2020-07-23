@@ -21,7 +21,8 @@ import Random
 
 type Test a
     = Test
-        { userTestFn : TestCase -> Result ( Stop, TestCase ) ( Bool, TestCase )
+        { label : String
+        , userTestFn : TestCase -> Result ( Stop, TestCase ) ( Bool, TestCase )
         , fuzzer : Fuzzer a
         }
 
@@ -30,6 +31,7 @@ type alias TestingState a =
     -- config
     { seed : Random.Seed
     , maxExamples : Int
+    , label : String
     , userTestFn : TestCase -> Result ( Stop, TestCase ) TestCase
     , fuzzer : Fuzzer a
 
@@ -53,9 +55,10 @@ init :
     -> Int
     -> Test a
     -> TestingState a
-init seed maxExamples (Test { userTestFn, fuzzer }) =
+init seed maxExamples (Test { label, userTestFn, fuzzer }) =
     { seed = seed
     , maxExamples = maxExamples
+    , label = label
     , userTestFn = markFailuresInteresting userTestFn
     , fuzzer = fuzzer
     , validTestCases = 0

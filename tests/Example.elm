@@ -14,7 +14,7 @@ listOfIntegers =
 
 findsSmallList : M.Test (List Int)
 findsSmallList =
-    M.test listOfIntegers <|
+    M.test "My awesome test" listOfIntegers <|
         \fuzzedList ->
             List.sum fuzzedList <= 1000
 
@@ -24,4 +24,4 @@ suite =
     Test.fuzz Fuzz.int "Finds an counterexample and successfully shrinks it" <|
         \seed ->
             M.run seed findsSmallList
-                |> Expect.equal (M.FailsWith [ 1001 ])
+                |> Expect.equal ( "My awesome test", M.FailsWith [ 1001 ] )

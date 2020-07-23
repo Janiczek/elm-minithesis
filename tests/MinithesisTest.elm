@@ -172,6 +172,7 @@ testMinithesis : String -> Fuzzer a -> (a -> Bool) -> TestResult a -> Test.Test
 testMinithesis name fuzzer userFn expectedResult =
     Test.fuzz Fuzz.int name <|
         \seed ->
-            Minithesis.test fuzzer userFn
+            Minithesis.test "" fuzzer userFn
                 |> Minithesis.run seed
+                |> Tuple.second
                 |> Expect.equal expectedResult

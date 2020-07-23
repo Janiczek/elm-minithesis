@@ -44,12 +44,12 @@ listOfIntegers =
 
 findsSmallList : Test (List Int)
 findsSmallList =
-    Minithesis.test listOfIntegers <|
+    Minithesis.test "My awesome test" listOfIntegers <|
         \fuzzedList ->
             List.sum fuzzedList <= 1000
 
 
-{-| Will fail and shrink to the minimal example: `FailsWith [1001]`
+{-| Will fail and shrink to the minimal example: `( "My awesome test", FailsWith [ 1001 ] )`
 -}
 minithesisTestResult : Int -> TestResult (List Int)
 minithesisTestResult seed =
