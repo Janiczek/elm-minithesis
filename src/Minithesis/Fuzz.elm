@@ -1,53 +1,68 @@
 module Minithesis.Fuzz exposing
-    ( Fuzzer
-    , andMap
-    , andThen
-    , anyChar
-    , anyFloat
-    , anyInt
-    , anyNumericFloat
-    , anyNumericInt
-    , bool
-    , char
-    , charRange
-    , constant
-    , filter
-    , float
-    , floatWith
-    , frequency
-    , frequencyValues
-    , int
-    , list
-    , listOfLength
-    , listWith
-    , map
-    , map2
-    , map3
-    , map4
-    , map5
-    , map6
-    , map7
-    , map8
-    , maybe
-    , oneOf
-    , oneOfValues
-    , reject
-    , result
-    , run
-    , string
-    , stringOfLength
-    , stringWith
-    , tuple
-    , tuple3
-    , uniqueByList
-    , uniqueByListOfLength
-    , uniqueByListWith
-    , uniqueList
-    , uniqueListOfLength
-    , uniqueListWith
+    ( Fuzzer, run
+    , bool, weightedBool
+    , int, anyNumericInt, anyInt
+    , float, anyNumericFloat, anyFloat, floatWith
+    , char, charRange, anyChar
+    , string, stringOfLength, stringWith
     , unit
-    , weightedBool
+    , maybe, result
+    , tuple, tuple3
+    , list, listOfLength, listWith
+    , uniqueList, uniqueListOfLength, uniqueListWith
+    , uniqueByList, uniqueByListOfLength, uniqueByListWith
+    , map, andMap, map2, map3, map4, map5, map6, map7, map8
+    , andThen, constant, reject, filter
+    , oneOf, oneOfValues, frequency, frequencyValues
     )
+
+{-|
+
+
+# The basics
+
+@docs Fuzzer, run
+
+
+# Values
+
+@docs bool, weightedBool
+
+@docs int, anyNumericInt, anyInt
+
+@docs float, anyNumericFloat, anyFloat, floatWith
+
+@docs char, charRange, anyChar
+
+@docs string, stringOfLength, stringWith
+
+@docs unit
+
+
+# Collections
+
+@docs maybe, result
+
+@docs tuple, tuple3
+
+@docs list, listOfLength, listWith
+
+@docs uniqueList, uniqueListOfLength, uniqueListWith
+
+@docs uniqueByList, uniqueByListOfLength, uniqueByListWith
+
+
+# Combinators
+
+@docs map, andMap, map2, map3, map4, map5, map6, map7, map8
+
+@docs andThen, constant, reject, filter
+
+@docs oneOf, oneOfValues, frequency, frequencyValues
+
+-}
+
+-- TODO write tests for: float, anyNumericFloat, anyFloat, floatWith , char, charRange, anyChar , string, stringOfLength, stringWith , list, uniqueListWith , uniqueByList, uniqueByListOfLength, uniqueByListWith , andMap
 
 import Char exposing (Char)
 import Minithesis.Fuzz.Float as Float
@@ -98,11 +113,9 @@ makeChoice n generator testCase =
 
     else
         let
+            runLength : Int
             runLength =
                 RandomRun.length testCase.randomRun
-
-            prefixLength =
-                RandomRun.length testCase.prefix
         in
         if runLength >= testCase.maxSize then
             testCase
@@ -110,6 +123,10 @@ makeChoice n generator testCase =
 
         else
             let
+                prefixLength : Int
+                prefixLength =
+                    RandomRun.length testCase.prefix
+
                 resultAndNewSeed : Result Stop ( Int, Maybe Random.Seed )
                 resultAndNewSeed =
                     if runLength < prefixLength then
@@ -463,13 +480,13 @@ uniqueByListWith toComparable range itemFuzzer =
     go Set.empty 0 []
 
 
-tuple : ( Fuzzer a, Fuzzer b ) -> Fuzzer ( a, b )
-tuple ( a, b ) =
+tuple : Fuzzer a -> Fuzzer b -> Fuzzer ( a, b )
+tuple a b =
     map2 Tuple.pair a b
 
 
-tuple3 : ( Fuzzer a, Fuzzer b, Fuzzer c ) -> Fuzzer ( a, b, c )
-tuple3 ( a, b, c ) =
+tuple3 : Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer ( a, b, c )
+tuple3 a b c =
     map3 (\ax bx cx -> ( ax, bx, cx )) a b c
 
 
@@ -788,7 +805,7 @@ anyNumericFloat =
             let
                 f : Float
                 f =
-                    Float.lexToFloat (highBits, lowBits)
+                    Float.lexToFloat ( highBits, lowBits )
             in
             if shouldNegate then
                 negate f
@@ -808,12 +825,13 @@ anyFloat : Fuzzer Float
 anyFloat =
     Debug.todo "anyFloat"
 
+
 floatWith :
     { min : Maybe Float
     , max : Maybe Float
     , allowNaN : Bool
     , allowInfinities : Bool
     }
-      -> Fuzzer Float
+    -> Fuzzer Float
 floatWith { min, max, allowNaN, allowInfinities } =
     Debug.todo "floatWith"
