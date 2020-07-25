@@ -34,6 +34,9 @@ module Minithesis.Fuzz exposing
     , reject
     , result
     , run
+    , string
+    , stringOfLength
+    , stringWith
     , tuple
     , tuple3
     , uniqueByList
