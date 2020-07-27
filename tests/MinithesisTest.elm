@@ -37,6 +37,14 @@ testMinithesis name fuzzer userFn expectedResult =
                 |> Expect.equal expectedResult
 
 
+testMinithesisGetsRejected : String -> Fuzzer a -> Test
+testMinithesisGetsRejected name fuzzer =
+    testMinithesis ("Gets rejected: " ++ name)
+        fuzzer
+        (\_ -> True)
+        (Error Unsatisfiable)
+
+
 testMinithesisCanGenerate : String -> Fuzzer a -> a -> Test
 testMinithesisCanGenerate name fuzzer value =
     testMinithesis ("Can generate " ++ name)
@@ -241,10 +249,24 @@ fuzzers =
                     code >= from && code <= to
                 )
                 Passes
+            , testMinithesisGetsRejected "Negative range"
+                (F.negativeInt
+                    |> F.andThen
+                        (\negFrom ->
+                            F.int negFrom -1
+                                |> F.andThen (F.charRange negFrom)
+                        )
+                )
+            , testMinithesisGetsRejected "from > to"
+                (F.nonnegativeInt
+                    |> F.andThen
+                        (\to ->
+                            F.int (to + 1) Random.maxInt
+                                |> F.andThen (\from -> F.charRange from to)
+                        )
+                )
             , todo "Doesn't generate surrogates"
             , todo "Doesn't return � (replacement char, 0xFFFD)"
-            , todo "Negative range gets rejected"
-            , todo "from > to gets rejected"
             ]
         , describe "oneOfValues"
             [ testMinithesisCanGenerate "element of the list: 1" (F.oneOfValues [ 1, 42 ]) 1
@@ -253,10 +275,8 @@ fuzzers =
                 (F.oneOfValues [ 42 ])
                 (\n -> n == 42)
                 Passes
-            , testMinithesis "Can't draw from empty"
+            , testMinithesisGetsRejected "Empty list"
                 (F.oneOfValues [])
-                (\n -> True)
-                (Error Unsatisfiable)
             ]
         , describe "oneOf"
             (let
@@ -275,10 +295,8 @@ fuzzers =
                 (F.oneOf [ F.unit ])
                 (\n -> n == ())
                 Passes
-             , testMinithesis "Can't draw from empty"
+             , testMinithesisGetsRejected "Empty list"
                 (F.oneOf [])
-                (\n -> True)
-                (Error Unsatisfiable)
              ]
             )
         , describe "frequencyValues"
@@ -296,10 +314,8 @@ fuzzers =
                 (F.frequencyValues [ ( 0.7, 42 ) ])
                 (\n -> n == 42)
                 Passes
-             , testMinithesis "Can't draw from empty"
+             , testMinithesisGetsRejected "Empty list"
                 (F.frequencyValues [])
-                (\n -> True)
-                (Error Unsatisfiable)
              ]
             )
         , describe "frequency"
@@ -319,10 +335,8 @@ fuzzers =
                 (F.frequency [ ( 0.3, F.unit ) ])
                 (\n -> n == ())
                 Passes
-             , testMinithesis "Can't draw from empty"
+             , testMinithesisGetsRejected "Empty list"
                 (F.frequency [])
-                (\n -> True)
-                (Error Unsatisfiable)
              ]
             )
         , describe "andThen"
@@ -393,10 +407,8 @@ fuzzers =
                 )
                 (\( length, list ) -> List.length list == length)
                 Passes
-            , testMinithesis "unsatisfiable"
+            , testMinithesisGetsRejected "Domain not large enough"
                 (F.uniqueListOfLength 5 (F.int 1 3))
-                (\_ -> True)
-                (Error Unsatisfiable)
             ]
         , describe "uniqueListWith"
             [ testMinithesis "empty list"
@@ -421,10 +433,8 @@ fuzzers =
                 (F.uniqueListWith { minLength = Just 1, maxLength = Nothing } (F.int 1 1))
                 (\list -> List.length list == 1)
                 Passes
-            , testMinithesis "unsatisfiable"
+            , testMinithesisGetsRejected "Domain not large enough"
                 (F.uniqueListWith { minLength = Just 2, maxLength = Just 2 } (F.int 1 1))
-                (\_ -> True)
-                (Error Unsatisfiable)
             ]
         ]
 
