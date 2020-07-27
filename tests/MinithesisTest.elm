@@ -5,7 +5,9 @@ import Fuzz
 import Minithesis exposing (TestResult(..))
 import Minithesis.Fuzz as F exposing (Fuzzer)
 import Minithesis.Stop exposing (Stop(..))
+import Random
 import Set
+import Shrink
 import Test exposing (Test, describe, fuzz, only, test, todo)
 
 
@@ -18,9 +20,16 @@ suite =
         ]
 
 
+seedFuzzer : Fuzz.Fuzzer Int
+seedFuzzer =
+    Fuzz.custom
+        (Random.int 0 Random.maxInt)
+        Shrink.noShrink
+
+
 testMinithesis : String -> Fuzzer a -> (a -> Bool) -> TestResult a -> Test
 testMinithesis name fuzzer userFn expectedResult =
-    Test.fuzz Fuzz.int name <|
+    fuzz seedFuzzer name <|
         \seed ->
             Minithesis.test "" fuzzer userFn
                 |> Minithesis.run seed
@@ -38,7 +47,7 @@ testMinithesisCanGenerate name fuzzer value =
 
 testMinithesisCanGenerateSatisfying : String -> Fuzzer a -> (a -> Bool) -> Test
 testMinithesisCanGenerateSatisfying name fuzzer predicate =
-    Test.fuzz Fuzz.int name <|
+    fuzz seedFuzzer name <|
         \seed ->
             Minithesis.test
                 ("Can generate value satisfying: " ++ name)
@@ -179,6 +188,63 @@ fuzzers =
                 F.anyNumericInt
                 (not << isNaN << toFloat)
                 Passes
+            ]
+        , describe "probability"
+            [ testMinithesis "Range 0..1"
+                F.probability
+                (\n -> n >= 0 && n <= 1)
+                Passes
+            ]
+        , describe "char"
+            [ testMinithesis "Range 32..126"
+                F.char
+                (\char ->
+                    let
+                        code =
+                            Char.toCode char
+                    in
+                    code >= 32 && code <= 126
+                )
+                Passes
+            ]
+        , describe "anyChar"
+            [ testMinithesis "Range 0..0x10FFFF"
+                F.anyChar
+                (\char ->
+                    let
+                        code =
+                            Char.toCode char
+                    in
+                    code >= 0 && code <= 0x0010FFFF
+                )
+                Passes
+            ]
+        , describe "charRange"
+            [ testMinithesis "Given range"
+                (F.int 0 0x0010FFFF
+                    |> F.andThen
+                        (\from ->
+                            F.int from 0x0010FFFF
+                                |> F.andThen
+                                    (\to ->
+                                        F.tuple
+                                            (F.constant ( from, to ))
+                                            (F.charRange from to)
+                                    )
+                        )
+                )
+                (\( ( from, to ), char ) ->
+                    let
+                        code =
+                            Char.toCode char
+                    in
+                    code >= from && code <= to
+                )
+                Passes
+            , todo "Doesn't generate surrogates"
+            , todo "Doesn't return � (replacement char, 0xFFFD)"
+            , todo "Negative range gets rejected"
+            , todo "from > to gets rejected"
             ]
         , describe "oneOfValues"
             [ testMinithesisCanGenerate "element of the list: 1" (F.oneOfValues [ 1, 42 ]) 1

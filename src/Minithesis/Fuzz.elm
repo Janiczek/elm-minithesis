@@ -1,7 +1,7 @@
 module Minithesis.Fuzz exposing
     ( Fuzzer, run
     , bool, weightedBool
-    , int, anyNumericInt, anyInt
+    , int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
     , float, anyNumericFloat, anyFloat, floatWith, probability
     , char, charRange, anyChar
     , string, stringOfLength, stringWith
@@ -28,7 +28,7 @@ module Minithesis.Fuzz exposing
 
 @docs bool, weightedBool
 
-@docs int, anyNumericInt, anyInt
+@docs int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
 
 @docs float, anyNumericFloat, anyFloat, floatWith, probability
 
@@ -63,8 +63,8 @@ module Minithesis.Fuzz exposing
 -}
 
 {- TODO write tests for:
-   float, anyNumericFloat, anyFloat, floatWith, probability
-   char, charRange, anyChar
+   positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
+   float, anyNumericFloat, anyFloat, floatWith
    string, stringOfLength, stringWith
    uniqueByList, uniqueByListOfLength, uniqueByListWith, andMap
 -}
@@ -179,8 +179,8 @@ makeChoice n generator testCase =
 
 {-| Returns a number in the range [0, n] (inclusive).
 -}
-nonnegativeInt : Int -> Fuzzer Int
-nonnegativeInt n =
+nonnegativeInt_ : Int -> Fuzzer Int
+nonnegativeInt_ n =
     Fuzzer (makeChoice n (nonnegativeIntGenerator n))
 
 
@@ -282,7 +282,7 @@ int from to =
         int to from
 
     else
-        nonnegativeInt (to - from)
+        nonnegativeInt_ (to - from)
             |> map (\n -> n + from)
 
 
@@ -291,6 +291,26 @@ int from to =
 anyNumericInt : Fuzzer Int
 anyNumericInt =
     int Random.minInt Random.maxInt
+
+
+positiveInt : Fuzzer Int
+positiveInt =
+    int 1 Random.maxInt
+
+
+negativeInt : Fuzzer Int
+negativeInt =
+    int Random.minInt -1
+
+
+nonpositiveInt : Fuzzer Int
+nonpositiveInt =
+    int Random.minInt 0
+
+
+nonnegativeInt : Fuzzer Int
+nonnegativeInt =
+    int 0 Random.maxInt
 
 
 intInfinity : Int
@@ -650,7 +670,12 @@ The range used for the char codes is 0 to 1114111 (0x10FFFF).
 -}
 anyChar : Fuzzer Char
 anyChar =
-    charRange 0 0x0010FFFF
+    charRange 0 maxChar
+
+
+maxChar : Int
+maxChar =
+    0x0010FFFF
 
 
 {-| Use your own char code range for Char generation!
@@ -664,8 +689,21 @@ anyChar =
 -}
 charRange : Int -> Int -> Fuzzer Char
 charRange from to =
-    int from to
-        |> map Char.fromCode
+    if from < 0 || to < 0 || from > to || from > maxChar || to > maxChar then
+        reject
+
+    else if from == to then
+        constant (Char.fromCode from)
+
+    else
+        int from to
+            |> filter (not << isSurrogate)
+            |> map Char.fromCode
+
+
+isSurrogate : Int -> Bool
+isSurrogate charCode =
+    charCode >= 0xD800 && charCode <= 0xDFFF
 
 
 {-| Generates random printable ASCII strings of up to 1000 characters.
