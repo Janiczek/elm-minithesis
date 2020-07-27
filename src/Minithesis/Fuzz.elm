@@ -757,8 +757,12 @@ result errFuzzer okFuzzer =
 
 float : Float -> Float -> Fuzzer Float
 float from to =
-    -- TODO implement
-    reject
+    floatWith
+        { min = Just from
+        , max = Just to
+        , allowNaN = False
+        , allowInfinities = False
+        }
 
 
 {-| Ranges over all possible floats: [-1.7976931348623157e308, 1.7976931348623157e308]
@@ -793,8 +797,12 @@ and also the +Infinity, -Infinity and NaN.
 -}
 anyFloat : Fuzzer Float
 anyFloat =
-    -- TODO implement
-    reject
+    floatWith
+        { min = Nothing
+        , max = Nothing
+        , allowNaN = True
+        , allowInfinities = True
+        }
 
 
 floatWith :
