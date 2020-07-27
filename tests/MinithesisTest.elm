@@ -6,7 +6,7 @@ import Minithesis exposing (TestResult(..))
 import Minithesis.Fuzz as F exposing (Fuzzer)
 import Minithesis.Stop exposing (Stop(..))
 import Set
-import Test exposing (Test, describe, fuzz, todo)
+import Test exposing (Test, describe, fuzz, only, test, todo)
 
 
 suite : Test
@@ -53,7 +53,12 @@ testMinithesisCanGenerateSatisfying name fuzzer predicate =
 general : Test
 general =
     describe "General"
-        [ todo "Running a test returns the label as first item in the tuple"
+        [ test "Running a test returns the label as first item in the tuple" <|
+            \() ->
+                Minithesis.test "label" F.reject (\_ -> True)
+                    |> Minithesis.run 0
+                    |> Tuple.first
+                    |> Expect.equal "label"
         ]
 
 
@@ -176,8 +181,8 @@ fuzzers =
                 Passes
             ]
         , describe "oneOfValues"
-            [ testMinithesisCanGenerate "element of the list - 1" (F.oneOfValues [ 1, 42 ]) 1
-            , testMinithesisCanGenerate "element of the list - 42" (F.oneOfValues [ 1, 42 ]) 42
+            [ testMinithesisCanGenerate "element of the list: 1" (F.oneOfValues [ 1, 42 ]) 1
+            , testMinithesisCanGenerate "element of the list: 42" (F.oneOfValues [ 1, 42 ]) 42
             , testMinithesis "One value -> picks it"
                 (F.oneOfValues [ 42 ])
                 (\n -> n == 42)
@@ -196,10 +201,10 @@ fuzzers =
                         , F.constant 2
                         ]
              in
-             [ testMinithesisCanGenerate "possible int - -2" fuzzer -2
-             , testMinithesisCanGenerate "possible int - -1" fuzzer -1
-             , testMinithesisCanGenerate "possible int - 0" fuzzer 0
-             , testMinithesisCanGenerate "possible int - 2" fuzzer 2
+             [ testMinithesisCanGenerate "possible int: -2" fuzzer -2
+             , testMinithesisCanGenerate "possible int: -1" fuzzer -1
+             , testMinithesisCanGenerate "possible int: 0" fuzzer 0
+             , testMinithesisCanGenerate "possible int: 2" fuzzer 2
              , testMinithesis "One fuzzer -> picks it"
                 (F.oneOf [ F.unit ])
                 (\n -> n == ())
@@ -211,17 +216,26 @@ fuzzers =
              ]
             )
         , describe "frequencyValues"
-            [ testMinithesisCanGenerate "element of the list - 1" (F.frequencyValues [ ( 0.3, 1 ), ( 0.7, 42 ) ]) 1
-            , testMinithesisCanGenerate "element of the list - 42" (F.frequencyValues [ ( 0.3, 1 ), ( 0.7, 42 ) ]) 42
-            , testMinithesis "One value -> picks it"
+            (let
+                fuzzer : Fuzzer Int
+                fuzzer =
+                    F.frequencyValues
+                        [ ( 0.3, 1 )
+                        , ( 0.7, 42 )
+                        ]
+             in
+             [ testMinithesisCanGenerate "element of the list: 1" fuzzer 1
+             , testMinithesisCanGenerate "element of the list: 42" fuzzer 42
+             , testMinithesis "One value -> picks it"
                 (F.frequencyValues [ ( 0.7, 42 ) ])
                 (\n -> n == 42)
                 Passes
-            , testMinithesis "Can't draw from empty"
+             , testMinithesis "Can't draw from empty"
                 (F.frequencyValues [])
                 (\n -> True)
                 (Error Unsatisfiable)
-            ]
+             ]
+            )
         , describe "frequency"
             (let
                 fuzzer : Fuzzer Int
@@ -231,10 +245,10 @@ fuzzers =
                         , ( 0.7, F.constant 2 )
                         ]
              in
-             [ testMinithesisCanGenerate "possible int - -2" fuzzer -2
-             , testMinithesisCanGenerate "possible int - -1" fuzzer -1
-             , testMinithesisCanGenerate "possible int - 0" fuzzer 0
-             , testMinithesisCanGenerate "possible int - 2" fuzzer 2
+             [ testMinithesisCanGenerate "possible int: -2" fuzzer -2
+             , testMinithesisCanGenerate "possible int: -1" fuzzer -1
+             , testMinithesisCanGenerate "possible int: 0" fuzzer 0
+             , testMinithesisCanGenerate "possible int: 2" fuzzer 2
              , testMinithesis "One fuzzer -> picks it"
                 (F.frequency [ ( 0.3, F.unit ) ])
                 (\n -> n == ())
@@ -257,6 +271,10 @@ fuzzers =
                 )
                 (\( m, n ) -> m <= n && n <= m + 10)
                 Passes
+            ]
+        , describe "list"
+            [ testMinithesisCanGenerate "empty list" (F.list F.unit) []
+            , testMinithesisCanGenerateSatisfying "nonempty list" (F.list F.unit) (not << List.isEmpty)
             ]
         , describe "listWith"
             [ testMinithesis "empty list"
@@ -311,6 +329,34 @@ fuzzers =
                 Passes
             , testMinithesis "unsatisfiable"
                 (F.uniqueListOfLength 5 (F.int 1 3))
+                (\_ -> True)
+                (Error Unsatisfiable)
+            ]
+        , describe "uniqueListWith"
+            [ testMinithesis "empty list"
+                (F.uniqueListWith { minLength = Nothing, maxLength = Just 0 } (F.int 1 1))
+                (\list -> List.isEmpty list)
+                Passes
+            , testMinithesis "single item list"
+                (F.uniqueListWith { minLength = Just 1, maxLength = Just 1 } (F.int 1 1))
+                (\list -> List.length list == 1)
+                Passes
+            , testMinithesis "one to three items"
+                (F.uniqueListWith { minLength = Just 1, maxLength = Just 3 } (F.int 1 10))
+                (\list ->
+                    let
+                        length =
+                            List.length list
+                    in
+                    length >= 1 && length <= 3
+                )
+                Passes
+            , testMinithesis "if given wiggling space does what it can"
+                (F.uniqueListWith { minLength = Just 1, maxLength = Nothing } (F.int 1 1))
+                (\list -> List.length list == 1)
+                Passes
+            , testMinithesis "unsatisfiable"
+                (F.uniqueListWith { minLength = Just 2, maxLength = Just 2 } (F.int 1 1))
                 (\_ -> True)
                 (Error Unsatisfiable)
             ]

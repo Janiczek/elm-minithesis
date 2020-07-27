@@ -1,4 +1,8 @@
-module Minithesis.Fuzz.Float exposing (lexToFloat)
+module Minithesis.Fuzz.Float exposing
+    ( fractionalFloat
+    , lexToFloat
+    , nastyFloats
+    )
 
 import Bitwise
 import Dict exposing (Dict)
@@ -43,6 +47,17 @@ lexToFloat ( highBits, lowBits ) =
         ( highBits, lowBits )
             |> Bitwise.combineTo52BitNumber
             |> toFloat
+
+
+fractionalFloat : ( Int, Int ) -> Float
+fractionalFloat ( high, low ) =
+    fraction (bitsToList ( high, low ))
+        / maxMantissa
+
+
+maxMantissa : Float
+maxMantissa =
+    fraction (bitsToList ( 0x000FFFFF, 0xFFFFFFFF ))
 
 
 maxExponent : Int
@@ -173,3 +188,44 @@ updateMantissa unbiasedExponent ( mantissaHigh, mantissaLow ) =
 
     else
         ( mantissaHigh, mantissaLow )
+
+
+nastyFloats : List Float
+nastyFloats =
+    let
+        specificExamples : List Float
+        specificExamples =
+            {- Manually ordered as in Hypothesis: we don't have a way (that I know of
+                - @janiczek) to get mantissa : Int and exponent : Int from a Float so we
+               let Python do it and we just copy what we see it output.
+            -}
+            [ 0.0
+            , 1.0e7
+            , 9007199254740992
+            , 1.5
+            , 1.1
+            , 1.9
+            , 2 + 1.0e-5
+            , 3.402823466e38
+            , 1.7976931348623157e308
+            , 0.5
+            , 1 - 1.0e-5
+            , 1.0 / 3
+            , 1.0e-5
+            , 1.192092896e-7
+            , 2.220446049250313e-16
+            , 1.175494351e-38
+            , 2.2250738585072014e-308
+            ]
+
+        nonfiniteValues : List Float
+        nonfiniteValues =
+            [ 1 / 0 -- inf
+            , 0 / 0 -- nan
+            ]
+
+        allPositive : List Float
+        allPositive =
+            specificExamples ++ List.concatMap (List.repeat 5) nonfiniteValues
+    in
+    allPositive ++ List.map negate allPositive

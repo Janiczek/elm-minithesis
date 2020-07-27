@@ -2,7 +2,7 @@ module Minithesis.Fuzz exposing
     ( Fuzzer, run
     , bool, weightedBool
     , int, anyNumericInt, anyInt
-    , float, anyNumericFloat, anyFloat, floatWith
+    , float, anyNumericFloat, anyFloat, floatWith, probability
     , char, charRange, anyChar
     , string, stringOfLength, stringWith
     , unit
@@ -30,7 +30,7 @@ module Minithesis.Fuzz exposing
 
 @docs int, anyNumericInt, anyInt
 
-@docs float, anyNumericFloat, anyFloat, floatWith
+@docs float, anyNumericFloat, anyFloat, floatWith, probability
 
 @docs char, charRange, anyChar
 
@@ -62,9 +62,15 @@ module Minithesis.Fuzz exposing
 
 -}
 
--- TODO write tests for: float, anyNumericFloat, anyFloat, floatWith , char, charRange, anyChar , string, stringOfLength, stringWith , list, uniqueListWith , uniqueByList, uniqueByListOfLength, uniqueByListWith , andMap
+{- TODO write tests for:
+   float, anyNumericFloat, anyFloat, floatWith, probability
+   char, charRange, anyChar
+   string, stringOfLength, stringWith
+   uniqueByList, uniqueByListOfLength, uniqueByListWith, andMap
+-}
 
 import Char exposing (Char)
+import List.Extra
 import Minithesis.Fuzz.Float as Float
 import Minithesis.RandomRun as RandomRun
 import Minithesis.Stop exposing (Stop(..))
@@ -287,27 +293,20 @@ anyNumericInt =
     int Random.minInt Random.maxInt
 
 
+intInfinity : Int
+intInfinity =
+    round (1 / 0)
+
+
 {-| Ranges over all possible integers: [-2147483648, 2147483647]
 and also the Int variants of +Infinity, -Infinity and NaN.
 -}
 anyInt : Fuzzer Int
 anyInt =
     let
-        infinity : Float
-        infinity =
-            1 / 0
-
-        intInfinity : Int
-        intInfinity =
-            round infinity
-
-        nan : Float
-        nan =
-            infinity / infinity
-
         intNaN : Int
         intNaN =
-            round nan
+            round (0 / 0)
     in
     oneOf
         [ anyNumericInt
@@ -317,12 +316,17 @@ anyInt =
         ]
 
 
-convertRange :
+int32 : Fuzzer Int
+int32 =
+    int 0 0xFFFFFFFF
+
+
+convertIntRange :
     { minLength : Maybe Int, maxLength : Maybe Int }
     -> { minLength : Int, maxLength : Int }
-convertRange { minLength, maxLength } =
+convertIntRange { minLength, maxLength } =
     { minLength = Maybe.withDefault 0 minLength
-    , maxLength = Maybe.withDefault (round (1 / 0)) maxLength
+    , maxLength = Maybe.withDefault intInfinity maxLength
     }
 
 
@@ -351,7 +355,7 @@ listWith :
 listWith range itemFuzzer =
     let
         { minLength, maxLength } =
-            convertRange range
+            convertIntRange range
 
         addItem : Int -> List a -> Fuzzer (List a)
         addItem accLength accList =
@@ -442,7 +446,7 @@ uniqueByListWith :
 uniqueByListWith toComparable range itemFuzzer =
     let
         { minLength, maxLength } =
-            convertRange range
+            convertIntRange range
 
         addItem : Set comparable -> Int -> List a -> Fuzzer (List a)
         addItem seen length acc =
@@ -729,8 +733,49 @@ oneOfValues items =
 
 frequency : List ( Float, Fuzzer a ) -> Fuzzer a
 frequency options =
-    -- TODO do with sampler (see the `sampler` branch)
-    reject
+    let
+        cleanOptions : List ( Float, Fuzzer a )
+        cleanOptions =
+            options
+                |> List.filter (\( weight, _ ) -> weight > 0)
+    in
+    case List.length cleanOptions of
+        0 ->
+            reject
+
+        n ->
+            let
+                ( reverseCumulativeOptions, sum ) =
+                    List.foldl
+                        (\( weight, fuzzer ) ( accCumulativeOptions, accSum ) ->
+                            let
+                                newSum =
+                                    accSum + weight
+                            in
+                            ( ( newSum, fuzzer ) :: accCumulativeOptions
+                            , newSum
+                            )
+                        )
+                        ( [], 0 )
+                        cleanOptions
+
+                cumulativeOptions =
+                    List.reverse reverseCumulativeOptions
+            in
+            probability
+                |> andThen
+                    (\p ->
+                        let
+                            f =
+                                p * sum
+                        in
+                        case List.Extra.find (\( weight, _ ) -> weight >= f) cumulativeOptions of
+                            Nothing ->
+                                reject
+
+                            Just ( _, fuzzer ) ->
+                                fuzzer
+                    )
 
 
 frequencyValues : List ( Float, a ) -> Fuzzer a
@@ -755,6 +800,14 @@ result errFuzzer okFuzzer =
         ]
 
 
+{-| Returns Float in range 0..1 inclusive (uniform distribution).
+-}
+probability : Fuzzer Float
+probability =
+    tuple int32 int32
+        |> map Float.fractionalFloat
+
+
 float : Float -> Float -> Fuzzer Float
 float from to =
     floatWith
@@ -770,10 +823,6 @@ except for +Infinity, -Infinity and NaN.
 -}
 anyNumericFloat : Fuzzer Float
 anyNumericFloat =
-    {- Given JS doesn't have 64-bit integers, we'll have to emulate the Hypothesis
-       logic using two 32-bit integers.
-    -}
-    -- TODO nasty floats from Hypothesis?
     map3
         (\highBits lowBits shouldNegate ->
             let
@@ -787,8 +836,8 @@ anyNumericFloat =
             else
                 f
         )
-        (int 0 0xFFFFFFFF)
-        (int 0 0xFFFFFFFF)
+        int32
+        int32
         bool
 
 
@@ -797,12 +846,34 @@ and also the +Infinity, -Infinity and NaN.
 -}
 anyFloat : Fuzzer Float
 anyFloat =
-    floatWith
-        { min = Nothing
-        , max = Nothing
-        , allowNaN = True
+    anyFloatWith
+        { allowNaN = True
         , allowInfinities = True
         }
+
+
+anyFloatWith : { allowNaN : Bool, allowInfinities : Bool } -> Fuzzer Float
+anyFloatWith { allowNaN, allowInfinities } =
+    let
+        isPermitted : Float -> Bool
+        isPermitted f =
+            if isNaN f then
+                allowNaN
+
+            else if isInfinite f then
+                allowInfinities
+
+            else
+                True
+
+        nastyFloats : List Float
+        nastyFloats =
+            List.filter isPermitted Float.nastyFloats
+    in
+    frequency
+        [ ( 0.2, anyNumericFloat )
+        , ( 0.8, oneOfValues nastyFloats )
+        ]
 
 
 floatWith :
@@ -812,6 +883,57 @@ floatWith :
     , allowInfinities : Bool
     }
     -> Fuzzer Float
-floatWith { min, max, allowNaN, allowInfinities } =
-    -- TODO implement
-    reject
+floatWith ({ min, max, allowNaN, allowInfinities } as options) =
+    {- TODO if we figure out how to do nextUp and nextDown for IEEE 734 floats,
+       we'll be able to do exclodeMin : Bool, excludeMax : Bool
+    -}
+    {- TODO should we filter by `not infinity if not allowInfinities` here too?
+       Seems redundant but Python Hypothesis does it...
+    -}
+    case ( min, max ) of
+        ( Nothing, Nothing ) ->
+            anyFloatWith
+                { allowNaN = allowNaN
+                , allowInfinities = allowInfinities
+                }
+
+        ( Just min_, Nothing ) ->
+            if min_ < 0 then
+                oneOf
+                    [ map abs anyNumericFloat
+                    , floatWith
+                        { min = Just min_
+                        , max = Just -0.0
+                        , allowNaN = allowNaN
+                        , allowInfinities = allowInfinities
+                        }
+                    ]
+
+            else
+                map (\f -> min_ + abs f) anyNumericFloat
+
+        ( Nothing, Just max_ ) ->
+            if max_ >= 0 then
+                oneOf
+                    [ floatWith
+                        { min = Just 0.0
+                        , max = Just max_
+                        , allowNaN = allowNaN
+                        , allowInfinities = allowInfinities
+                        }
+                    , map (abs >> negate) anyNumericFloat
+                    ]
+
+            else
+                map (\f -> max_ - abs f) anyNumericFloat
+
+        ( Just min_, Just max_ ) ->
+            if min_ > max_ then
+                reject
+
+            else if min_ == max_ then
+                constant min_
+
+            else
+                probability
+                    |> map (\f -> f * (max_ - min_) + min_)
