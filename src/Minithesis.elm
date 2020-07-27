@@ -3,6 +3,7 @@ module Minithesis exposing
     , Test
     , TestResult(..)
     , defaultOptions
+    , isFailsWith
     , run
     , runWith
     , test
@@ -95,3 +96,13 @@ runState state =
                         Err ( stop, _ ) ->
                             Error stop
     )
+
+
+isFailsWith : TestResult a -> Bool
+isFailsWith result =
+    case result of
+        FailsWith _ ->
+            True
+
+        _ ->
+            False

@@ -495,46 +495,6 @@ constant a =
     Fuzzer (\testCase -> Ok ( a, testCase ))
 
 
-oneOfValues : List a -> Fuzzer a
-oneOfValues constants =
-    case List.length constants of
-        0 ->
-            reject
-
-        length ->
-            nonnegativeInt (length - 1)
-                |> andThen
-                    (\chosenValueIndex ->
-                        case constants |> List.drop chosenValueIndex |> List.head of
-                            Nothing ->
-                                -- shouldn't happen
-                                reject
-
-                            Just chosenValue ->
-                                constant chosenValue
-                    )
-
-
-oneOf : List (Fuzzer a) -> Fuzzer a
-oneOf fuzzers =
-    case List.length fuzzers of
-        0 ->
-            reject
-
-        length ->
-            nonnegativeInt (length - 1)
-                |> andThen
-                    (\chosenFuzzerIndex ->
-                        case fuzzers |> List.drop chosenFuzzerIndex |> List.head of
-                            Nothing ->
-                                -- shouldn't happen
-                                reject
-
-                            Just chosenFuzzer ->
-                                chosenFuzzer
-                    )
-
-
 map : (a -> b) -> Fuzzer a -> Fuzzer b
 map fn (Fuzzer fuzzer) =
     Fuzzer
@@ -727,41 +687,50 @@ stringWith range =
         |> map String.fromList
 
 
+oneOf : List (Fuzzer a) -> Fuzzer a
+oneOf fuzzers =
+    case List.length fuzzers of
+        0 ->
+            reject
+
+        length ->
+            int 0 (length - 1)
+                |> andThen
+                    (\i ->
+                        case List.head (List.drop i fuzzers) of
+                            Nothing ->
+                                -- shouldn't be possible
+                                reject
+
+                            Just fuzzer ->
+                                fuzzer
+                    )
+
+
+oneOfValues : List a -> Fuzzer a
+oneOfValues items =
+    case List.length items of
+        0 ->
+            reject
+
+        length ->
+            int 0 (length - 1)
+                |> andThen
+                    (\i ->
+                        case List.head (List.drop i items) of
+                            Nothing ->
+                                -- shouldn't be possible
+                                reject
+
+                            Just item ->
+                                constant item
+                    )
+
+
 frequency : List ( Float, Fuzzer a ) -> Fuzzer a
 frequency options =
-    let
-        filteredOptions : List ( Float, Fuzzer a )
-        filteredOptions =
-            List.filter (\( p, _ ) -> p > 0) options
-
-        sum : Float
-        sum =
-            List.sum (List.map Tuple.first filteredOptions)
-
-        pick : Float -> ( Float, b ) -> List ( Float, b ) -> b
-        pick countdown ( p, option ) rest =
-            if countdown <= p then
-                option
-
-            else
-                case rest of
-                    [] ->
-                        option
-
-                    next :: rest_ ->
-                        pick (countdown - p) next rest_
-    in
-    if sum <= 0 then
-        reject
-
-    else
-        case filteredOptions of
-            [] ->
-                reject
-
-            first :: rest ->
-                float 0 sum
-                    |> andThen (\f -> pick f first rest)
+    -- TODO do with sampler (see the `sampler` branch)
+    reject
 
 
 frequencyValues : List ( Float, a ) -> Fuzzer a
@@ -788,7 +757,8 @@ result errFuzzer okFuzzer =
 
 float : Float -> Float -> Fuzzer Float
 float from to =
-    Debug.todo "float"
+    -- TODO implement
+    reject
 
 
 {-| Ranges over all possible floats: [-1.7976931348623157e308, 1.7976931348623157e308]
@@ -823,7 +793,8 @@ and also the +Infinity, -Infinity and NaN.
 -}
 anyFloat : Fuzzer Float
 anyFloat =
-    Debug.todo "anyFloat"
+    -- TODO implement
+    reject
 
 
 floatWith :
@@ -834,4 +805,5 @@ floatWith :
     }
     -> Fuzzer Float
 floatWith { min, max, allowNaN, allowInfinities } =
-    Debug.todo "floatWith"
+    -- TODO implement
+    reject

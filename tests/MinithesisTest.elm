@@ -38,10 +38,16 @@ testMinithesisCanGenerate name fuzzer value =
 
 testMinithesisCanGenerateSatisfying : String -> Fuzzer a -> (a -> Bool) -> Test
 testMinithesisCanGenerateSatisfying name fuzzer predicate =
-    testMinithesis ("Can generate value satisfying: " ++ name)
-        fuzzer
-        (not << predicate)
-        (FailsWith value)
+    Test.fuzz Fuzz.int name <|
+        \seed ->
+            Minithesis.test
+                ("Can generate value satisfying: " ++ name)
+                fuzzer
+                (not << predicate)
+                |> Minithesis.run seed
+                |> Tuple.second
+                |> Minithesis.isFailsWith
+                |> Expect.true "Should fail with an example of the value satisfying the predicate"
 
 
 general : Test
@@ -146,10 +152,14 @@ fuzzers =
         , describe "anyInt"
             [ testMinithesis "Full range"
                 F.anyInt
-                (\n -> n >= -2147483648 && n <= 2147483647)
+                (\n ->
+                    isInfinite (toFloat n)
+                        || isNaN (toFloat n)
+                        || (n >= -2147483648 && n <= 2147483647)
+                )
                 Passes
-            , testMinithesisCanGenerateSatisfying "any Infinity" F.anyInt isInfinite
-            , testMinithesisCanGenerateSatisfying "NaN" F.anyInt isNaN
+            , testMinithesisCanGenerateSatisfying "any Infinity" F.anyInt (toFloat >> isInfinite)
+            , testMinithesisCanGenerateSatisfying "NaN" F.anyInt (toFloat >> isNaN)
             ]
         , describe "anyNumericInt"
             [ testMinithesis "Full range"
@@ -158,11 +168,11 @@ fuzzers =
                 Passes
             , testMinithesis "Cannot generate any Infinity"
                 F.anyNumericInt
-                (not << isInfinite)
+                (not << isInfinite << toFloat)
                 Passes
             , testMinithesis "Cannot generate NaN"
                 F.anyNumericInt
-                (not << isNaN)
+                (not << isNaN << toFloat)
                 Passes
             ]
         , describe "oneOfValues"
