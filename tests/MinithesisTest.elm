@@ -804,6 +804,16 @@ fuzzers =
                                     )
                         )
                 )
+            , -- this bit us when we did integer averages :facepalm:
+              testMinithesisCanGenerateSatisfying "average edge-case"
+                (F.listWith
+                    { minLength = Nothing
+                    , maxLength = Just 1
+                    , customAverageLength = Nothing
+                    }
+                    F.unit
+                )
+                (\list -> List.length list == 1)
             ]
         , describe "listOfLength"
             [ testMinithesis "always the specified length"
