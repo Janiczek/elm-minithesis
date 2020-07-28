@@ -1081,6 +1081,25 @@ anyFloat =
         }
 
 
+nanOrInfiniteFloat : { allowNaN : Bool, allowInfinities : Bool } -> Fuzzer Float
+nanOrInfiniteFloat { allowNaN, allowInfinities } =
+    if allowNaN && allowInfinities then
+        oneOfValues
+            [ 1 / 0
+            , -1 / 0
+            , 0 / 0
+            ]
+
+    else if allowNaN then
+        constant (0 / 0)
+
+    else
+        oneOfValues
+            [ 1 / 0
+            , -1 / 0
+            ]
+
+
 anyFloatWith : { allowNaN : Bool, allowInfinities : Bool } -> Fuzzer Float
 anyFloatWith { allowNaN, allowInfinities } =
     let
@@ -1192,5 +1211,22 @@ floatWith ({ min, max, allowNaN, allowInfinities } as options) =
                 constant min_
 
             else
-                probability
-                    |> map (\f -> f * (max_ - min_) + min_)
+                let
+                    scaledFloat : Fuzzer Float
+                    scaledFloat =
+                        probability
+                            |> map (\f -> f * (max_ - min_) + min_)
+                in
+                if allowNaN || allowInfinities then
+                    frequency
+                        [ ( 0.5, scaledFloat )
+                        , ( 0.5
+                          , nanOrInfiniteFloat
+                                { allowNaN = allowNaN
+                                , allowInfinities = allowInfinities
+                                }
+                          )
+                        ]
+
+                else
+                    scaledFloat
