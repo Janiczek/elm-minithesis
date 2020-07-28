@@ -223,6 +223,42 @@ fuzzers =
                 (not << isNaN << toFloat)
                 Passes
             ]
+        , describe "positiveInt"
+            [ testMinithesisCannotGenerateSatisfying "negative int"
+                F.positiveInt
+                (\n -> n < 0)
+            , testMinithesisCannotGenerate "zero"
+                F.positiveInt
+                0
+            ]
+        , describe "negativeInt"
+            [ testMinithesisCannotGenerateSatisfying "positive int"
+                F.negativeInt
+                (\n -> n > 0)
+            , testMinithesisCannotGenerate "zero"
+                F.negativeInt
+                0
+            ]
+        , describe "nonpositiveInt"
+            [ testMinithesisCannotGenerateSatisfying "positive int"
+                F.nonpositiveInt
+                (\n -> n > 0)
+
+            -- TODO kinda hard to do such a test - depends on too much luck:
+            --, testMinithesisCanGenerate "zero"
+            --    F.nonpositiveInt
+            --    0
+            ]
+        , describe "nonnegativeInt"
+            [ testMinithesisCannotGenerateSatisfying "negative int"
+                F.nonnegativeInt
+                (\n -> n < 0)
+
+            -- TODO kinda hard to do such a test - depends on too much luck:
+            --, testMinithesisCanGenerate "zero"
+            --    F.nonnegativeInt
+            --    0
+            ]
         , describe "probability"
             [ testMinithesis "Range 0..1"
                 F.probability

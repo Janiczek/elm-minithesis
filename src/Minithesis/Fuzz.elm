@@ -63,10 +63,8 @@ module Minithesis.Fuzz exposing
 -}
 
 {- TODO write tests for:
-   positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
    float, anyNumericFloat, anyFloat, floatWith
    uniqueByList, uniqueByListOfLength, uniqueByListWith
-   andMap
 -}
 
 import Char exposing (Char)
