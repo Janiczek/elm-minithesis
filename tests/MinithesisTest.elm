@@ -47,7 +47,7 @@ testMinithesisGetsRejected name fuzzer =
 
 testMinithesisCanGenerate : String -> Fuzzer a -> a -> Test
 testMinithesisCanGenerate name fuzzer value =
-    testMinithesis ("Can generate " ++ name)
+    testMinithesis ("Can generate: " ++ name)
         fuzzer
         (\v -> v /= value)
         (FailsWith value)
@@ -65,6 +65,32 @@ testMinithesisCanGenerateSatisfying name fuzzer predicate =
                 |> Tuple.second
                 |> Minithesis.isFailsWith
                 |> Expect.true "Should fail with an example of the value satisfying the predicate"
+
+
+testMinithesisCannotGenerate : String -> Fuzzer a -> a -> Test
+testMinithesisCannotGenerate name fuzzer value =
+    fuzz seedFuzzer name <|
+        \seed ->
+            Minithesis.test
+                ("Cannot generate: " ++ name)
+                fuzzer
+                (\v -> v == value)
+                |> Minithesis.run seed
+                |> Tuple.second
+                |> Expect.notEqual Passes
+
+
+testMinithesisCannotGenerateSatisfying : String -> Fuzzer a -> (a -> Bool) -> Test
+testMinithesisCannotGenerateSatisfying name fuzzer predicate =
+    fuzz seedFuzzer name <|
+        \seed ->
+            Minithesis.test
+                ("Cannot generate: " ++ name)
+                fuzzer
+                predicate
+                |> Minithesis.run seed
+                |> Tuple.second
+                |> Expect.notEqual Passes
 
 
 general : Test
@@ -265,8 +291,30 @@ fuzzers =
                                 |> F.andThen (\from -> F.charRange from to)
                         )
                 )
-            , todo "Doesn't generate surrogates"
-            , todo "Doesn't return � (replacement char, 0xFFFD)"
+            , testMinithesisCannotGenerateSatisfying "surrogates (0xD800..0xDFFF)"
+                (F.int 0 0x0010FFFF
+                    |> F.andThen
+                        (\from ->
+                            F.int from 0x0010FFFF
+                                |> F.andThen (F.charRange from)
+                        )
+                )
+                (\c ->
+                    let
+                        code =
+                            Char.toCode c
+                    in
+                    code >= 0xD800 && code <= 0xDFFF
+                )
+            , testMinithesisCannotGenerate "replacement char (0xFFFD)"
+                (F.int 0 0x0010FFFF
+                    |> F.andThen
+                        (\from ->
+                            F.int from 0x0010FFFF
+                                |> F.andThen (F.charRange from)
+                        )
+                )
+                '�'
             ]
         , describe "oneOfValues"
             [ testMinithesisCanGenerate "element of the list: 1" (F.oneOfValues [ 1, 42 ]) 1
