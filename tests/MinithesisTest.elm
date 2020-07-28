@@ -1120,7 +1120,7 @@ shrinkingChallenges =
         [ challengeBound5
         , challengeReverse
         , challengeLargeUnionList
-        , todo "Calculator" -- https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
+        , challengeCalculator
         ]
 
 
@@ -1201,3 +1201,89 @@ challengeLargeUnionList =
         (F.list (F.list F.anyNumericInt))
         (\lists -> Set.size (Set.fromList (List.concat lists)) <= 4)
         (FailsWith [ [ -2147483648, -2147483647, -2147483646, -2147483645, -2147483644 ] ])
+
+
+{-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md>
+-}
+challengeCalculator : Test
+challengeCalculator =
+    let
+        eval : CalcExpr -> Maybe CalcExpr
+        eval expr =
+            -- Nothing will mean "we would have divided by zero"
+            case expr of
+                Int int ->
+                    Just (Int int)
+
+                Plus a b ->
+                    case ( eval a, eval b ) of
+                        ( Just (Int a_), Just (Int b_) ) ->
+                            Just (Int (a_ + b_))
+
+                        ( Just a_, Just b_ ) ->
+                            Just (Plus a_ b_)
+
+                        _ ->
+                            Nothing
+
+                Div a b ->
+                    case ( eval a, eval b ) of
+                        ( Just _, Just (Int 0) ) ->
+                            Nothing
+
+                        ( Just (Int a_), Just (Int b_) ) ->
+                            Just (Int (a_ // b_))
+
+                        ( Just a_, Just b_ ) ->
+                            Just (Div a_ b_)
+
+                        _ ->
+                            Nothing
+
+        containsDivBy0 : CalcExpr -> Bool
+        containsDivBy0 expr =
+            case expr of
+                Int _ ->
+                    False
+
+                Plus a b ->
+                    containsDivBy0 a || containsDivBy0 b
+
+                Div a b ->
+                    b == Int 0 || containsDivBy0 a || containsDivBy0 b
+    in
+    testMinithesis "Calculator"
+        calcExprFuzzer
+        (\expr ->
+            if containsDivBy0 expr then
+                -- skip it
+                True
+
+            else
+                -- no division by zero would have happened
+                eval expr /= Nothing
+        )
+        (FailsWith
+            (Div
+                (Int -2147483648)
+                (Div
+                    (Int -2147483647)
+                    (Int -2147483648)
+                )
+            )
+        )
+
+
+type CalcExpr
+    = Int Int
+    | Plus CalcExpr CalcExpr
+    | Div CalcExpr CalcExpr
+
+
+calcExprFuzzer : Fuzzer CalcExpr
+calcExprFuzzer =
+    F.frequency
+        [ ( 5, F.map Int F.anyNumericInt )
+        , ( 1, F.map2 Plus (F.lazy (\_ -> calcExprFuzzer)) (F.lazy (\_ -> calcExprFuzzer)) )
+        , ( 1, F.map2 Div (F.lazy (\_ -> calcExprFuzzer)) (F.lazy (\_ -> calcExprFuzzer)) )
+        ]
