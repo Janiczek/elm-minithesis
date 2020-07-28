@@ -14,6 +14,7 @@ module Minithesis.Fuzz exposing
     , map, andMap, map2, map3, map4, map5, map6, map7, map8
     , andThen, constant, reject, filter
     , oneOf, oneOfValues, frequency, frequencyValues
+    {- , exampleRun -}
     )
 
 {-|
@@ -21,7 +22,7 @@ module Minithesis.Fuzz exposing
 
 # The basics
 
-@docs Fuzzer, run, example, exampleWithSeed
+@docs Fuzzer, example, exampleWithSeed, exampleRun
 
 
 # Values
@@ -138,6 +139,57 @@ exampleWithSeed seedInt (Fuzzer fn) =
                             acc
     in
     go 10 (Random.initialSeed seedInt) []
+
+
+
+--exampleRun : Fuzzer a -> Result Stop (a, List Int)
+--exampleRun (Fuzzer fn) =
+--    let
+--        fallbackSeed : Random.Seed -> Random.Seed
+--        fallbackSeed seed =
+--            seed
+--                |> Random.step (Random.constant ())
+--                |> Tuple.second
+--
+--        nextSeed : Random.Seed -> Maybe Random.Seed -> Random.Seed
+--        nextSeed previousSeed maybeNextSeed =
+--            case maybeNextSeed of
+--                Just seed ->
+--                    seed
+--
+--                Nothing ->
+--                    fallbackSeed previousSeed
+--
+--        go : Int -> Random.Seed -> List a -> List a
+--        go i seed acc =
+--            if i <= 0 then
+--                acc
+--
+--            else
+--                case
+--                    fn
+--                        (TestCase.init
+--                            { seed = seed
+--
+--                            -- TODO perhaps we can make this a Maybe so that this never hangs?
+--                            , maxSize = 1000
+--                            , prefix = RandomRun.empty
+--                            }
+--                        )
+--                of
+--                    Ok ( value, testCase ) ->
+--                        go
+--                            (i - 1)
+--                            (nextSeed seed testCase.seed)
+--                            (value :: acc)
+--
+--                    Err ( _, testCase ) ->
+--                        go
+--                            i
+--                            (nextSeed seed testCase.seed)
+--                            acc
+--    in
+--    go 10 (Random.initialSeed seedInt) []
 
 
 {-| All fuzzers need to somehow go through picking an Int.
@@ -385,14 +437,14 @@ int32 =
     int 0 0xFFFFFFFF
 
 
-avg : Int -> Int -> Int
+avg : Float -> Float -> Float
 avg x y =
-    if isInfinite (toFloat x) || isInfinite (toFloat y) then
+    if isInfinite x || isInfinite y then
         -- TODO maybe deal with the sign? Probably not needed
-        intInfinity
+        1 / 0
 
     else
-        (x + y) // 2
+        (x + y) / 2
 
 
 convertIntRange :
@@ -417,20 +469,26 @@ convertIntRange { minLength, maxLength, customAverageLength } =
                 |> Maybe.withDefault intInfinity
                 |> max 0
 
+        min__ =
+            toFloat min_
+
+        max__ =
+            toFloat max_
+
         average =
             case customAverageLength of
                 Just avg_ ->
-                    avg_
+                    toFloat avg_
 
                 Nothing ->
                     -- Taken from Python Hypothesis (ListStrategy)
                     -- This deals with the cases where max is Infinity
                     min
-                        (max (min_ * 2) (min_ + 5))
-                        (avg min_ max_)
+                        (max (min__ * 2) (min__ + 5))
+                        (avg min__ max__)
 
         continueProbability =
-            1 - 1 / (1 + toFloat average)
+            1 - 1 / (1 + average)
     in
     { minLength = min_
     , maxLength = max_
