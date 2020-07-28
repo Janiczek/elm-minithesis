@@ -1,5 +1,5 @@
 module Minithesis.Fuzz exposing
-    ( Fuzzer, run, example
+    ( Fuzzer, run, example, exampleWithSeed
     , bool, weightedBool
     , int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
     , float, anyNumericFloat, anyFloat, floatWith, probability
@@ -21,7 +21,7 @@ module Minithesis.Fuzz exposing
 
 # The basics
 
-@docs Fuzzer, run, example
+@docs Fuzzer, run, example, exampleWithSeed
 
 
 # Values
@@ -90,7 +90,12 @@ run (Fuzzer fn) testCase =
 
 
 example : Fuzzer a -> List a
-example (Fuzzer fn) =
+example fuzzer =
+    exampleWithSeed 0 fuzzer
+
+
+exampleWithSeed : Int -> Fuzzer a -> List a
+exampleWithSeed seedInt (Fuzzer fn) =
     let
         fallbackSeed : Random.Seed -> Random.Seed
         fallbackSeed seed =
@@ -117,7 +122,9 @@ example (Fuzzer fn) =
                     fn
                         (TestCase.init
                             { seed = seed
-                            , maxSize = 100
+
+                            -- TODO perhaps we can make this a Maybe so that this never hangs?
+                            , maxSize = 1000
                             , prefix = RandomRun.empty
                             }
                         )
@@ -134,7 +141,7 @@ example (Fuzzer fn) =
                             (nextSeed seed testCase.seed)
                             acc
     in
-    go 10 (Random.initialSeed 0) []
+    go 10 (Random.initialSeed seedInt) []
 
 
 {-| All fuzzers need to somehow go through picking an Int.
@@ -369,11 +376,11 @@ anyInt =
         intNaN =
             round (0 / 0)
     in
-    oneOf
-        [ anyNumericInt
-        , constant intInfinity
-        , constant (negate intInfinity)
-        , constant intNaN
+    frequency
+        [ ( 10, anyNumericInt )
+        , ( 1, constant intInfinity )
+        , ( 1, constant (negate intInfinity) )
+        , ( 1, constant intNaN )
         ]
 
 
@@ -1024,8 +1031,8 @@ anyFloatWith { allowNaN, allowInfinities } =
             List.filter isPermitted Float.nastyFloats
     in
     frequency
-        [ ( 0.2, wellShrinkingFloat { allowInfinities = allowInfinities } )
-        , ( 0.8, oneOfValues nastyFloats )
+        [ ( 0.5, wellShrinkingFloat { allowInfinities = allowInfinities } )
+        , ( 0.5, oneOfValues nastyFloats )
         ]
 
 
