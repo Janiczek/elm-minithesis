@@ -1,5 +1,5 @@
 module Minithesis.Fuzz exposing
-    ( Fuzzer, run
+    ( Fuzzer, run, example
     , bool, weightedBool
     , int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
     , float, anyNumericFloat, anyFloat, floatWith, probability
@@ -21,7 +21,7 @@ module Minithesis.Fuzz exposing
 
 # The basics
 
-@docs Fuzzer, run
+@docs Fuzzer, run, example
 
 
 # Values
@@ -87,6 +87,54 @@ type Fuzzer a
 run : Fuzzer a -> TestCase -> Result ( Stop, TestCase ) ( a, TestCase )
 run (Fuzzer fn) testCase =
     fn testCase
+
+
+example : Fuzzer a -> List a
+example (Fuzzer fn) =
+    let
+        fallbackSeed : Random.Seed -> Random.Seed
+        fallbackSeed seed =
+            seed
+                |> Random.step (Random.constant ())
+                |> Tuple.second
+
+        nextSeed : Random.Seed -> Maybe Random.Seed -> Random.Seed
+        nextSeed previousSeed maybeNextSeed =
+            case maybeNextSeed of
+                Just seed ->
+                    seed
+
+                Nothing ->
+                    fallbackSeed previousSeed
+
+        go : Int -> Random.Seed -> List a -> List a
+        go i seed acc =
+            if i <= 0 then
+                acc
+
+            else
+                case
+                    fn
+                        (TestCase.init
+                            { seed = seed
+                            , maxSize = 100
+                            , prefix = RandomRun.empty
+                            }
+                        )
+                of
+                    Ok ( value, testCase ) ->
+                        go
+                            (i - 1)
+                            (nextSeed seed testCase.seed)
+                            (value :: acc)
+
+                    Err ( _, testCase ) ->
+                        go
+                            i
+                            (nextSeed seed testCase.seed)
+                            acc
+    in
+    go 10 (Random.initialSeed 0) []
 
 
 {-| All fuzzers need to somehow go through picking an Int.
