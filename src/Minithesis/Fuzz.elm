@@ -65,8 +65,8 @@ module Minithesis.Fuzz exposing
 {- TODO write tests for:
    positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
    float, anyNumericFloat, anyFloat, floatWith
-   string, stringOfLength, stringWith
-   uniqueByList, uniqueByListOfLength, uniqueByListWith, andMap
+   uniqueByList, uniqueByListOfLength, uniqueByListWith
+   andMap
 -}
 
 import Char exposing (Char)
@@ -345,8 +345,14 @@ convertIntRange :
     { minLength : Maybe Int, maxLength : Maybe Int }
     -> { minLength : Int, maxLength : Int }
 convertIntRange { minLength, maxLength } =
-    { minLength = Maybe.withDefault 0 minLength
-    , maxLength = Maybe.withDefault intInfinity maxLength
+    { minLength =
+        minLength
+            |> Maybe.withDefault 0
+            |> max 0
+    , maxLength =
+        maxLength
+            |> Maybe.withDefault intInfinity
+            |> max 0
     }
 
 
@@ -376,37 +382,45 @@ listWith range itemFuzzer =
     let
         { minLength, maxLength } =
             convertIntRange range
-
-        addItem : Int -> List a -> Fuzzer (List a)
-        addItem accLength accList =
-            itemFuzzer
-                |> andThen
-                    (\item ->
-                        go (accLength + 1) (item :: accList)
-                    )
-
-        go : Int -> List a -> Fuzzer (List a)
-        go length acc =
-            if length < minLength then
-                forcedChoice 1
-                    |> andThen (\_ -> addItem length acc)
-
-            else if length + 1 >= maxLength then
-                forcedChoice 0
-                    |> andThen (\_ -> constant (List.reverse acc))
-
-            else
-                weightedBool 0.9
-                    |> andThen
-                        (\coin ->
-                            if coin then
-                                addItem length acc
-
-                            else
-                                constant (List.reverse acc)
-                        )
     in
-    go 0 []
+    if minLength > maxLength then
+        reject
+
+    else if maxLength <= 0 then
+        constant []
+
+    else
+        let
+            addItem : Int -> List a -> Fuzzer (List a)
+            addItem accLength accList =
+                itemFuzzer
+                    |> andThen
+                        (\item ->
+                            go (accLength + 1) (item :: accList)
+                        )
+
+            go : Int -> List a -> Fuzzer (List a)
+            go length acc =
+                if length < minLength then
+                    forcedChoice 1
+                        |> andThen (\_ -> addItem length acc)
+
+                else if length == maxLength then
+                    forcedChoice 0
+                        |> andThen (\_ -> constant (List.reverse acc))
+
+                else
+                    weightedBool 0.9
+                        |> andThen
+                            (\coin ->
+                                if coin then
+                                    addItem length acc
+
+                                else
+                                    constant (List.reverse acc)
+                            )
+        in
+        go 0 []
 
 
 uniqueList : Fuzzer comparable -> Fuzzer (List comparable)
@@ -467,41 +481,49 @@ uniqueByListWith toComparable range itemFuzzer =
     let
         { minLength, maxLength } =
             convertIntRange range
-
-        addItem : Set comparable -> Int -> List a -> Fuzzer (List a)
-        addItem seen length acc =
-            itemFuzzer
-                |> filter (\item -> not <| Set.member (toComparable item) seen)
-                |> andThen
-                    (\item ->
-                        go
-                            (Set.insert (toComparable item) seen)
-                            (length + 1)
-                            (item :: acc)
-                    )
-
-        go : Set comparable -> Int -> List a -> Fuzzer (List a)
-        go seen length acc =
-            if length < minLength then
-                forcedChoice 1
-                    |> andThen (\_ -> addItem seen length acc)
-
-            else if length + 1 >= maxLength then
-                forcedChoice 0
-                    |> andThen (\_ -> constant (List.reverse acc))
-
-            else
-                weightedBool 0.9
-                    |> andThen
-                        (\coin ->
-                            if coin then
-                                addItem seen length acc
-
-                            else
-                                constant (List.reverse acc)
-                        )
     in
-    go Set.empty 0 []
+    if minLength > maxLength then
+        reject
+
+    else if maxLength <= 0 then
+        constant []
+
+    else
+        let
+            addItem : Set comparable -> Int -> List a -> Fuzzer (List a)
+            addItem seen length acc =
+                itemFuzzer
+                    |> filter (\item -> not <| Set.member (toComparable item) seen)
+                    |> andThen
+                        (\item ->
+                            go
+                                (Set.insert (toComparable item) seen)
+                                (length + 1)
+                                (item :: acc)
+                        )
+
+            go : Set comparable -> Int -> List a -> Fuzzer (List a)
+            go seen length acc =
+                if length < minLength then
+                    forcedChoice 1
+                        |> andThen (\_ -> addItem seen length acc)
+
+                else if length == maxLength then
+                    forcedChoice 0
+                        |> andThen (\_ -> constant (List.reverse acc))
+
+                else
+                    weightedBool 0.9
+                        |> andThen
+                            (\coin ->
+                                if coin then
+                                    addItem seen length acc
+
+                                else
+                                    constant (List.reverse acc)
+                            )
+        in
+        go Set.empty 0 []
 
 
 tuple : Fuzzer a -> Fuzzer b -> Fuzzer ( a, b )
@@ -723,9 +745,18 @@ stringOfLength length =
         |> map String.fromList
 
 
-stringWith : { minLength : Maybe Int, maxLength : Maybe Int } -> Fuzzer String
-stringWith range =
-    listWith range char
+stringWith :
+    { minLength : Maybe Int
+    , maxLength : Maybe Int
+    , charFuzzer : Fuzzer Char
+    }
+    -> Fuzzer String
+stringWith { minLength, maxLength, charFuzzer } =
+    listWith
+        { minLength = minLength
+        , maxLength = maxLength
+        }
+        charFuzzer
         |> map String.fromList
 
 

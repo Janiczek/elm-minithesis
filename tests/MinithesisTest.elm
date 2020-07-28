@@ -64,7 +64,7 @@ testMinithesisCanGenerateSatisfying name fuzzer predicate =
                 |> Minithesis.run seed
                 |> Tuple.second
                 |> Minithesis.isFailsWith
-                |> Expect.true "Should fail with an example of the value satisfying the predicate"
+                |> Expect.true "Should have given an example of a generated value satisfying the predicate"
 
 
 testMinithesisCannotGenerate : String -> Fuzzer a -> a -> Test
@@ -316,6 +316,107 @@ fuzzers =
                 )
                 '�'
             ]
+        , describe "string"
+            [ testMinithesisCanGenerate "empty string" F.string ""
+            , testMinithesisCanGenerateSatisfying "nonempty string" F.string (not << String.isEmpty)
+            ]
+        , describe "stringOfLength"
+            [ testMinithesis "negative length -> empty list"
+                (F.negativeInt
+                    |> F.andThen F.stringOfLength
+                )
+                (\string -> String.isEmpty string)
+                Passes
+            , testMinithesis "always the specified length"
+                (F.int 0 10
+                    |> F.andThen
+                        (\length ->
+                            F.tuple
+                                (F.constant length)
+                                (F.stringOfLength length)
+                        )
+                )
+                (\( length, string ) -> String.length string == length)
+                Passes
+            ]
+        , describe "stringWith"
+            [ testMinithesisCanGenerateSatisfying "string containing a char from different range if given a different fuzzer"
+                (F.stringWith
+                    { minLength = Just 1
+                    , maxLength = Just 10
+                    , charFuzzer = F.anyChar
+                    }
+                )
+                (\string ->
+                    string
+                        |> String.toList
+                        |> List.any
+                            (\c ->
+                                let
+                                    code =
+                                        Char.toCode c
+                                in
+                                code < 32 || code > 126
+                            )
+                )
+            , testMinithesis "empty string"
+                (F.stringWith
+                    { minLength = Nothing
+                    , maxLength = Just 0
+                    , charFuzzer = F.char
+                    }
+                )
+                (\string -> String.isEmpty string)
+                Passes
+            , testMinithesis "single char string"
+                (F.stringWith
+                    { minLength = Just 1
+                    , maxLength = Just 1
+                    , charFuzzer = F.char
+                    }
+                )
+                (\string -> String.length string == 1)
+                Passes
+            , testMinithesisCanGenerateSatisfying "one to three chars: 1"
+                (F.stringWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , charFuzzer = F.char
+                    }
+                )
+                (\string -> String.length string == 1)
+            , testMinithesisCanGenerateSatisfying "one to three chars: 2"
+                (F.stringWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , charFuzzer = F.char
+                    }
+                )
+                (\string -> String.length string == 2)
+            , testMinithesisCanGenerateSatisfying "one to three chars: 3"
+                (F.stringWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , charFuzzer = F.char
+                    }
+                )
+                (\string -> String.length string == 3)
+            , testMinithesisGetsRejected "min > max"
+                (F.int 0 10
+                    |> F.andThen
+                        (\to ->
+                            F.int (to + 1) (to + 10)
+                                |> F.andThen
+                                    (\from ->
+                                        F.stringWith
+                                            { minLength = Just from
+                                            , maxLength = Just to
+                                            , charFuzzer = F.char
+                                            }
+                                    )
+                        )
+                )
+            ]
         , describe "oneOfValues"
             [ testMinithesisCanGenerate "element of the list: 1" (F.oneOfValues [ 1, 42 ]) 1
             , testMinithesisCanGenerate "element of the list: 42" (F.oneOfValues [ 1, 42 ]) 42
@@ -413,16 +514,30 @@ fuzzers =
                 (F.listWith { minLength = Just 1, maxLength = Just 1 } F.unit)
                 (\list -> List.length list == 1)
                 Passes
-            , testMinithesis "one to three items"
+            , testMinithesisCanGenerateSatisfying "one to three items: 1"
                 (F.listWith { minLength = Just 1, maxLength = Just 3 } F.unit)
-                (\list ->
-                    let
-                        length =
-                            List.length list
-                    in
-                    length >= 1 && length <= 3
+                (\list -> List.length list == 1)
+            , testMinithesisCanGenerateSatisfying "one to three items: 2"
+                (F.listWith { minLength = Just 1, maxLength = Just 3 } F.unit)
+                (\list -> List.length list == 2)
+            , testMinithesisCanGenerateSatisfying "one to three items: 3"
+                (F.listWith { minLength = Just 1, maxLength = Just 3 } F.unit)
+                (\list -> List.length list == 3)
+            , testMinithesisGetsRejected "min > max"
+                (F.int 0 10
+                    |> F.andThen
+                        (\to ->
+                            F.int (to + 1) (to + 10)
+                                |> F.andThen
+                                    (\from ->
+                                        F.listWith
+                                            { minLength = Just from
+                                            , maxLength = Just to
+                                            }
+                                            F.unit
+                                    )
+                        )
                 )
-                Passes
             ]
         , describe "listOfLength"
             [ testMinithesis "always the specified length"
@@ -435,6 +550,12 @@ fuzzers =
                         )
                 )
                 (\( length, list ) -> List.length list == length)
+                Passes
+            , testMinithesis "negative length -> empty list"
+                (F.negativeInt
+                    |> F.andThen (\length -> F.listOfLength length F.unit)
+                )
+                (\list -> list == [])
                 Passes
             ]
         , describe "uniqueList"
@@ -457,6 +578,12 @@ fuzzers =
                 Passes
             , testMinithesisGetsRejected "Domain not large enough"
                 (F.uniqueListOfLength 5 (F.int 1 3))
+            , testMinithesis "negative length -> empty list"
+                (F.negativeInt
+                    |> F.andThen (\length -> F.uniqueListOfLength length (F.int 1 10))
+                )
+                (\list -> list == [])
+                Passes
             ]
         , describe "uniqueListWith"
             [ testMinithesis "empty list"
@@ -467,22 +594,36 @@ fuzzers =
                 (F.uniqueListWith { minLength = Just 1, maxLength = Just 1 } (F.int 1 1))
                 (\list -> List.length list == 1)
                 Passes
-            , testMinithesis "one to three items"
+            , testMinithesisCanGenerateSatisfying "one to three items: 1"
                 (F.uniqueListWith { minLength = Just 1, maxLength = Just 3 } (F.int 1 10))
-                (\list ->
-                    let
-                        length =
-                            List.length list
-                    in
-                    length >= 1 && length <= 3
-                )
-                Passes
+                (\list -> List.length list == 1)
+            , testMinithesisCanGenerateSatisfying "one to three items: 2"
+                (F.uniqueListWith { minLength = Just 1, maxLength = Just 3 } (F.int 1 10))
+                (\list -> List.length list == 2)
+            , testMinithesisCanGenerateSatisfying "one to three items: 3"
+                (F.uniqueListWith { minLength = Just 1, maxLength = Just 3 } (F.int 1 10))
+                (\list -> List.length list == 3)
             , testMinithesis "if given wiggling space does what it can"
                 (F.uniqueListWith { minLength = Just 1, maxLength = Nothing } (F.int 1 1))
                 (\list -> List.length list == 1)
                 Passes
             , testMinithesisGetsRejected "Domain not large enough"
                 (F.uniqueListWith { minLength = Just 2, maxLength = Just 2 } (F.int 1 1))
+            , testMinithesisGetsRejected "min > max"
+                (F.int 0 10
+                    |> F.andThen
+                        (\to ->
+                            F.int (to + 1) (to + 10)
+                                |> F.andThen
+                                    (\from ->
+                                        F.uniqueListWith
+                                            { minLength = Just from
+                                            , maxLength = Just to
+                                            }
+                                            (F.int 1 20)
+                                    )
+                        )
+                )
             ]
         ]
 
