@@ -1117,12 +1117,81 @@ shrinkers =
 shrinkingChallenges : Test
 shrinkingChallenges =
     describe "Shrinking challenges"
-        -- https://github.com/jlink/shrinking-challenge
-        [ todo "Bound 5" -- https://github.com/jlink/shrinking-challenge/blob/main/challenges/bound5.md
+        [ challengeBound5
         , challengeReverse
         , challengeLargeUnionList
         , todo "Calculator" -- https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
         ]
+
+
+{-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/bound5.md>
+
+Elm doesn't have 16bit integers. We'll have to emulate that a little.
+
+Here's an example:
+<https://www.mathworks.com/matlabcentral/answers/355611-is-there-a-way-to-do-signed-16-bit-integer-math>
+
+-}
+challengeBound5 : Test
+challengeBound5 =
+    let
+        bits =
+            16
+
+        max =
+            2 ^ bits
+
+        maxHalf =
+            max // 2
+
+        i16 : Int -> Int
+        i16 n =
+            ((n + maxHalf) |> modBy max) - maxHalf
+
+        i16Add : Int -> Int -> Int
+        i16Add a b =
+            i16 (a + b)
+
+        i16Sum : List Int -> Int
+        i16Sum ns =
+            List.foldl i16Add 0 ns
+
+        boundedList : Fuzzer (List Int)
+        boundedList =
+            F.listWith
+                { minLength = Nothing
+                , maxLength = Just 1
+                , customAverageLength = Nothing
+                }
+                (F.int -32768 32767)
+                |> F.filter (\list -> i16Sum list < 256)
+
+        tuple5 : Fuzzer ( List Int, List Int, ( List Int, List Int, List Int ) )
+        tuple5 =
+            F.tuple3
+                boundedList
+                boundedList
+                (F.tuple3
+                    boundedList
+                    boundedList
+                    boundedList
+                )
+    in
+    skip <|
+        testMinithesis "Bound 5"
+            tuple5
+            (\( a, b, ( c, d, e ) ) ->
+                let
+                    _ =
+                        if List.isEmpty <| List.concat [ a, b, c, d, e ] then
+                            []
+
+                        else
+                            Debug.log "input" [ a, b, c, d, e ]
+                in
+                i16Sum (List.concat [ a, b, c, d, e ]) < 5 * 256
+            )
+            (FailsWith ( [ -32768 ], [ -1 ], ( [], [], [] ) ))
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md>
