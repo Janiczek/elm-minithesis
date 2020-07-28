@@ -9,7 +9,7 @@ module Minithesis exposing
     , test
     )
 
-import Minithesis.Fuzz as Fuzz exposing (Fuzzer)
+import Minithesis.Fuzz.Internal as Fuzz exposing (Fuzzer)
 import Minithesis.Stop exposing (Stop(..))
 import Minithesis.TestCase as TestCase exposing (Status(..))
 import Minithesis.TestingState as TestingState exposing (TestingState)

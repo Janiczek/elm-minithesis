@@ -1,5 +1,5 @@
 module Minithesis.Fuzz exposing
-    ( Fuzzer, run, example, exampleWithSeed
+    ( Fuzzer, example, exampleWithSeed
     , bool, weightedBool
     , int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
     , float, anyNumericFloat, anyFloat, floatWith, probability
@@ -65,6 +65,7 @@ module Minithesis.Fuzz exposing
 import Char exposing (Char)
 import List.Extra
 import Minithesis.Fuzz.Float as Float
+import Minithesis.Fuzz.Internal as Internal exposing (Fuzzer(..))
 import Minithesis.RandomRun as RandomRun
 import Minithesis.Stop exposing (Stop(..))
 import Minithesis.TestCase as TestCase
@@ -80,13 +81,8 @@ import Set exposing (Set)
 -- 1) UNDERLYING ABSTRACTION
 
 
-type Fuzzer a
-    = Fuzzer (TestCase -> Result ( Stop, TestCase ) ( a, TestCase ))
-
-
-run : Fuzzer a -> TestCase -> Result ( Stop, TestCase ) ( a, TestCase )
-run (Fuzzer fn) testCase =
-    fn testCase
+type alias Fuzzer a =
+    Internal.Fuzzer a
 
 
 example : Fuzzer a -> List a
