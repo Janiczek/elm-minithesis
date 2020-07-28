@@ -37,9 +37,9 @@ testMinithesis name fuzzer userFn expectedResult =
                 |> Expect.equal expectedResult
 
 
-testMinithesisGetsRejected : String -> Fuzzer a -> Test
-testMinithesisGetsRejected name fuzzer =
-    testMinithesis ("Gets rejected: " ++ name)
+testMinithesisRejects : String -> Fuzzer a -> Test
+testMinithesisRejects name fuzzer =
+    testMinithesis ("Rejects: " ++ name)
         fuzzer
         (\_ -> True)
         (Error Unsatisfiable)
@@ -184,6 +184,14 @@ fuzzers =
                 (F.int -10 10)
                 (\n -> n >= -10 && n <= 10)
                 Passes
+            , testMinithesisRejects "min > max"
+                (F.int (Random.minInt + 1) Random.maxInt
+                    |> F.andThen
+                        (\from ->
+                            F.int Random.minInt (from - 1)
+                                |> F.andThen (F.int from)
+                        )
+                )
             , testMinithesis "Random.minInt"
                 (F.int -2147483648 -2147483648)
                 (\n -> n == -2147483648)
@@ -227,17 +235,13 @@ fuzzers =
             [ testMinithesisCannotGenerateSatisfying "negative int"
                 F.positiveInt
                 (\n -> n < 0)
-            , testMinithesisCannotGenerate "zero"
-                F.positiveInt
-                0
+            , testMinithesisCannotGenerate "zero" F.positiveInt 0
             ]
         , describe "negativeInt"
             [ testMinithesisCannotGenerateSatisfying "positive int"
                 F.negativeInt
                 (\n -> n > 0)
-            , testMinithesisCannotGenerate "zero"
-                F.negativeInt
-                0
+            , testMinithesisCannotGenerate "zero" F.negativeInt 0
             ]
         , describe "nonpositiveInt"
             [ testMinithesisCannotGenerateSatisfying "positive int"
@@ -245,9 +249,7 @@ fuzzers =
                 (\n -> n > 0)
 
             -- TODO kinda hard to do such a test - depends on too much luck:
-            --, testMinithesisCanGenerate "zero"
-            --    F.nonpositiveInt
-            --    0
+            --, testMinithesisCanGenerate "zero" F.nonpositiveInt 0
             ]
         , describe "nonnegativeInt"
             [ testMinithesisCannotGenerateSatisfying "negative int"
@@ -255,15 +257,212 @@ fuzzers =
                 (\n -> n < 0)
 
             -- TODO kinda hard to do such a test - depends on too much luck:
-            --, testMinithesisCanGenerate "zero"
-            --    F.nonnegativeInt
-            --    0
+            --, testMinithesisCanGenerate "zero" F.nonnegativeInt 0
             ]
         , describe "probability"
             [ testMinithesis "Range 0..1"
                 F.probability
                 (\n -> n >= 0 && n <= 1)
                 Passes
+            , testMinithesisCannotGenerateSatisfying "NaN" F.probability isNaN
+            , testMinithesisCannotGenerateSatisfying "Infinities" F.probability isInfinite
+            ]
+        , describe "float"
+            (let
+                arbitraryFloat : Fuzzer ( ( Float, Float ), Float )
+                arbitraryFloat =
+                    F.int Random.minInt Random.maxInt
+                        |> F.andThen
+                            (\from ->
+                                F.int from Random.maxInt
+                                    |> F.andThen
+                                        (\to ->
+                                            let
+                                                from_ =
+                                                    toFloat from
+
+                                                to_ =
+                                                    toFloat to
+                                            in
+                                            F.tuple
+                                                (F.constant ( from_, to_ ))
+                                                (F.float from_ to_)
+                                        )
+                            )
+             in
+             [ testMinithesis "Given range"
+                arbitraryFloat
+                (\( ( from, to ), float ) ->
+                    float >= from && float <= to
+                )
+                Passes
+             , testMinithesisCannotGenerateSatisfying "NaN"
+                arbitraryFloat
+                (\( _, float ) -> isNaN float)
+             , testMinithesisCannotGenerateSatisfying "infinities"
+                arbitraryFloat
+                (\( _, float ) -> isInfinite float)
+             , testMinithesisRejects "min > max"
+                (F.int (Random.minInt + 1) Random.maxInt
+                    |> F.andThen
+                        (\from ->
+                            F.int Random.minInt (from - 1)
+                                |> F.andThen (\to -> F.float (toFloat from) (toFloat to))
+                        )
+                )
+             , testMinithesisRejects "from = NaN"
+                (F.int Random.minInt Random.maxInt
+                    |> F.andThen (\to -> F.float (0 / 0) (toFloat to))
+                )
+             , testMinithesisRejects "from = +Inf"
+                (F.int Random.minInt Random.maxInt
+                    |> F.andThen (\to -> F.float (1 / 0) (toFloat to))
+                )
+             , testMinithesisRejects "from = -Inf"
+                (F.int Random.minInt Random.maxInt
+                    |> F.andThen (\to -> F.float (-1 / 0) (toFloat to))
+                )
+             , testMinithesisRejects "to = NaN"
+                (F.int Random.minInt Random.maxInt
+                    |> F.andThen (\from -> F.float (toFloat from) (0 / 0))
+                )
+             , testMinithesisRejects "to = +Inf"
+                (F.int Random.minInt Random.maxInt
+                    |> F.andThen (\from -> F.float (toFloat from) (1 / 0))
+                )
+             , testMinithesisRejects "to = -Inf"
+                (F.int Random.minInt Random.maxInt
+                    |> F.andThen (\from -> F.float (toFloat from) (-1 / 0))
+                )
+             ]
+            )
+        , describe "anyNumericFloat"
+            [ testMinithesisCannotGenerateSatisfying "NaN" F.anyNumericFloat isNaN
+            , testMinithesisCannotGenerateSatisfying "infinities" F.anyNumericFloat isInfinite
+            , testMinithesis "Full range"
+                F.anyNumericFloat
+                (\f -> f >= -1.7976931348623157e308 && f <= 1.7976931348623157e308)
+                Passes
+            ]
+        , describe "anyFloat"
+            [ testMinithesisCanGenerateSatisfying "NaN" F.anyFloat isNaN
+            , testMinithesisCanGenerateSatisfying "infinities" F.anyFloat isInfinite
+            , testMinithesis "Full range"
+                (F.anyFloat |> F.filter (\f -> not (isInfinite f || isNaN f)))
+                (\f -> f >= -1.7976931348623157e308 && f <= 1.7976931348623157e308)
+                Passes
+            ]
+        , describe "floatWith"
+            [ testMinithesisCanGenerateSatisfying "NaN if allowNaN = True"
+                (F.floatWith
+                    { min = Nothing
+                    , max = Nothing
+                    , allowNaN = True
+                    , allowInfinities = False
+                    }
+                )
+                isNaN
+            , testMinithesisCannotGenerateSatisfying "NaN if allowNaN = False"
+                (F.floatWith
+                    { min = Nothing
+                    , max = Nothing
+                    , allowNaN = False
+                    , allowInfinities = False
+                    }
+                )
+                isNaN
+            , testMinithesisCanGenerateSatisfying "infinities if allowInfinities = True"
+                (F.floatWith
+                    { min = Nothing
+                    , max = Nothing
+                    , allowNaN = False
+                    , allowInfinities = True
+                    }
+                )
+                isInfinite
+            , testMinithesisCannotGenerateSatisfying "infinities if allowInfinities = False"
+                (F.floatWith
+                    { min = Nothing
+                    , max = Nothing
+                    , allowNaN = False
+                    , allowInfinities = False
+                    }
+                )
+                isInfinite
+            , testMinithesis "Full range"
+                (F.floatWith
+                    { min = Nothing
+                    , max = Nothing
+                    , allowNaN = False
+                    , allowInfinities = False
+                    }
+                )
+                (\f -> f >= -1.7976931348623157e308 && f <= 1.7976931348623157e308)
+                Passes
+            , testMinithesis "min works"
+                (F.anyNumericFloat
+                    |> F.andThen
+                        (\min ->
+                            F.tuple
+                                (F.constant min)
+                                (F.floatWith
+                                    { min = Just min
+                                    , max = Nothing
+                                    , allowNaN = False
+                                    , allowInfinities = False
+                                    }
+                                )
+                        )
+                )
+                (\( min, f ) -> f >= min)
+                Passes
+            , testMinithesis "max works"
+                (F.anyNumericFloat
+                    |> F.andThen
+                        (\max ->
+                            F.tuple
+                                (F.constant max)
+                                (F.floatWith
+                                    { min = Nothing
+                                    , max = Just max
+                                    , allowNaN = False
+                                    , allowInfinities = False
+                                    }
+                                )
+                        )
+                )
+                (\( max, f ) -> f <= max)
+                Passes
+            , testMinithesisCanGenerateSatisfying "NaN with min/max = Just"
+                (F.tuple
+                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyNumericFloat)
+                    |> F.andThen
+                        (\( min, max ) ->
+                            F.floatWith
+                                { min = min
+                                , max = max
+                                , allowNaN = True
+                                , allowInfinities = False
+                                }
+                        )
+                )
+                isNaN
+            , testMinithesisCanGenerateSatisfying "infinities with min/max = Just"
+                (F.tuple
+                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyNumericFloat)
+                    |> F.andThen
+                        (\( min, max ) ->
+                            F.floatWith
+                                { min = min
+                                , max = max
+                                , allowNaN = False
+                                , allowInfinities = True
+                                }
+                        )
+                )
+                isInfinite
             ]
         , describe "char"
             [ testMinithesis "Range 32..126"
@@ -311,7 +510,7 @@ fuzzers =
                     code >= from && code <= to
                 )
                 Passes
-            , testMinithesisGetsRejected "Negative range"
+            , testMinithesisRejects "Negative range"
                 (F.negativeInt
                     |> F.andThen
                         (\negFrom ->
@@ -319,7 +518,7 @@ fuzzers =
                                 |> F.andThen (F.charRange negFrom)
                         )
                 )
-            , testMinithesisGetsRejected "from > to"
+            , testMinithesisRejects "from > to"
                 (F.nonnegativeInt
                     |> F.andThen
                         (\to ->
@@ -437,7 +636,7 @@ fuzzers =
                     }
                 )
                 (\string -> String.length string == 3)
-            , testMinithesisGetsRejected "min > max"
+            , testMinithesisRejects "min > max"
                 (F.int 0 10
                     |> F.andThen
                         (\to ->
@@ -460,7 +659,7 @@ fuzzers =
                 (F.oneOfValues [ 42 ])
                 (\n -> n == 42)
                 Passes
-            , testMinithesisGetsRejected "Empty list"
+            , testMinithesisRejects "Empty list"
                 (F.oneOfValues [])
             ]
         , describe "oneOf"
@@ -480,7 +679,7 @@ fuzzers =
                 (F.oneOf [ F.unit ])
                 (\n -> n == ())
                 Passes
-             , testMinithesisGetsRejected "Empty list"
+             , testMinithesisRejects "Empty list"
                 (F.oneOf [])
              ]
             )
@@ -499,7 +698,7 @@ fuzzers =
                 (F.frequencyValues [ ( 0.7, 42 ) ])
                 (\n -> n == 42)
                 Passes
-             , testMinithesisGetsRejected "Empty list"
+             , testMinithesisRejects "Empty list"
                 (F.frequencyValues [])
              ]
             )
@@ -520,7 +719,7 @@ fuzzers =
                 (F.frequency [ ( 0.3, F.unit ) ])
                 (\n -> n == ())
                 Passes
-             , testMinithesisGetsRejected "Empty list"
+             , testMinithesisRejects "Empty list"
                 (F.frequency [])
              ]
             )
@@ -543,23 +742,53 @@ fuzzers =
             ]
         , describe "listWith"
             [ testMinithesis "empty list"
-                (F.listWith { minLength = Nothing, maxLength = Just 0 } F.unit)
+                (F.listWith
+                    { minLength = Nothing
+                    , maxLength = Just 0
+                    , customAverageLength = Nothing
+                    }
+                    F.unit
+                )
                 (\list -> List.isEmpty list)
                 Passes
             , testMinithesis "single item list"
-                (F.listWith { minLength = Just 1, maxLength = Just 1 } F.unit)
+                (F.listWith
+                    { minLength = Just 1
+                    , maxLength = Just 1
+                    , customAverageLength = Nothing
+                    }
+                    F.unit
+                )
                 (\list -> List.length list == 1)
                 Passes
             , testMinithesisCanGenerateSatisfying "one to three items: 1"
-                (F.listWith { minLength = Just 1, maxLength = Just 3 } F.unit)
+                (F.listWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    F.unit
+                )
                 (\list -> List.length list == 1)
             , testMinithesisCanGenerateSatisfying "one to three items: 2"
-                (F.listWith { minLength = Just 1, maxLength = Just 3 } F.unit)
+                (F.listWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    F.unit
+                )
                 (\list -> List.length list == 2)
             , testMinithesisCanGenerateSatisfying "one to three items: 3"
-                (F.listWith { minLength = Just 1, maxLength = Just 3 } F.unit)
+                (F.listWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    F.unit
+                )
                 (\list -> List.length list == 3)
-            , testMinithesisGetsRejected "min > max"
+            , testMinithesisRejects "min > max"
                 (F.int 0 10
                     |> F.andThen
                         (\to ->
@@ -569,6 +798,7 @@ fuzzers =
                                         F.listWith
                                             { minLength = Just from
                                             , maxLength = Just to
+                                            , customAverageLength = Nothing
                                             }
                                             F.unit
                                     )
@@ -612,7 +842,7 @@ fuzzers =
                 )
                 (\( length, list ) -> List.length list == length)
                 Passes
-            , testMinithesisGetsRejected "Domain not large enough"
+            , testMinithesisRejects "Domain not large enough"
                 (F.uniqueListOfLength 5 (F.int 1 3))
             , testMinithesis "negative length -> empty list"
                 (F.negativeInt
@@ -623,29 +853,71 @@ fuzzers =
             ]
         , describe "uniqueListWith"
             [ testMinithesis "empty list"
-                (F.uniqueListWith { minLength = Nothing, maxLength = Just 0 } (F.int 1 1))
+                (F.uniqueListWith
+                    { minLength = Nothing
+                    , maxLength = Just 0
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 1)
+                )
                 (\list -> List.isEmpty list)
                 Passes
             , testMinithesis "single item list"
-                (F.uniqueListWith { minLength = Just 1, maxLength = Just 1 } (F.int 1 1))
+                (F.uniqueListWith
+                    { minLength = Just 1
+                    , maxLength = Just 1
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 1)
+                )
                 (\list -> List.length list == 1)
                 Passes
             , testMinithesisCanGenerateSatisfying "one to three items: 1"
-                (F.uniqueListWith { minLength = Just 1, maxLength = Just 3 } (F.int 1 10))
+                (F.uniqueListWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 10)
+                )
                 (\list -> List.length list == 1)
             , testMinithesisCanGenerateSatisfying "one to three items: 2"
-                (F.uniqueListWith { minLength = Just 1, maxLength = Just 3 } (F.int 1 10))
+                (F.uniqueListWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 10)
+                )
                 (\list -> List.length list == 2)
             , testMinithesisCanGenerateSatisfying "one to three items: 3"
-                (F.uniqueListWith { minLength = Just 1, maxLength = Just 3 } (F.int 1 10))
+                (F.uniqueListWith
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 10)
+                )
                 (\list -> List.length list == 3)
             , testMinithesis "if given wiggling space does what it can"
-                (F.uniqueListWith { minLength = Just 1, maxLength = Nothing } (F.int 1 1))
+                (F.uniqueListWith
+                    { minLength = Just 1
+                    , maxLength = Nothing
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 1)
+                )
                 (\list -> List.length list == 1)
                 Passes
-            , testMinithesisGetsRejected "Domain not large enough"
-                (F.uniqueListWith { minLength = Just 2, maxLength = Just 2 } (F.int 1 1))
-            , testMinithesisGetsRejected "min > max"
+            , testMinithesisRejects "Domain not large enough"
+                (F.uniqueListWith
+                    { minLength = Just 2
+                    , maxLength = Just 2
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 1)
+                )
+            , testMinithesisRejects "min > max"
                 (F.int 0 10
                     |> F.andThen
                         (\to ->
@@ -655,6 +927,7 @@ fuzzers =
                                         F.uniqueListWith
                                             { minLength = Just from
                                             , maxLength = Just to
+                                            , customAverageLength = Nothing
                                             }
                                             (F.int 1 20)
                                     )

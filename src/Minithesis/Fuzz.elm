@@ -63,7 +63,6 @@ module Minithesis.Fuzz exposing
 -}
 
 {- TODO write tests for:
-   float, anyNumericFloat, anyFloat, floatWith
    uniqueByList, uniqueByListOfLength, uniqueByListWith
 -}
 
@@ -277,7 +276,7 @@ The range of supported values is (Random.minInt, Random.maxInt):
 int : Int -> Int -> Fuzzer Int
 int from to =
     if from > to then
-        int to from
+        reject
 
     else
         nonnegativeInt_ (to - from)
@@ -339,18 +338,56 @@ int32 =
     int 0 0xFFFFFFFF
 
 
+avg : Int -> Int -> Int
+avg x y =
+    if isInfinite (toFloat x) || isInfinite (toFloat y) then
+        -- TODO maybe deal with the sign? Probably not needed
+        intInfinity
+
+    else
+        (x + y) // 2
+
+
 convertIntRange :
-    { minLength : Maybe Int, maxLength : Maybe Int }
-    -> { minLength : Int, maxLength : Int }
-convertIntRange { minLength, maxLength } =
-    { minLength =
-        minLength
-            |> Maybe.withDefault 0
-            |> max 0
-    , maxLength =
-        maxLength
-            |> Maybe.withDefault intInfinity
-            |> max 0
+    { minLength : Maybe Int
+    , maxLength : Maybe Int
+    , customAverageLength : Maybe Int
+    }
+    ->
+        { minLength : Int
+        , maxLength : Int
+        , continueProbability : Float
+        }
+convertIntRange { minLength, maxLength, customAverageLength } =
+    let
+        min_ =
+            minLength
+                |> Maybe.withDefault 0
+                |> max 0
+
+        max_ =
+            maxLength
+                |> Maybe.withDefault intInfinity
+                |> max 0
+
+        average =
+            case customAverageLength of
+                Just avg_ ->
+                    avg_
+
+                Nothing ->
+                    -- Taken from Python Hypothesis (ListStrategy)
+                    -- This deals with the cases where max is Infinity
+                    min
+                        (max (min_ * 2) (min_ + 5))
+                        (avg min_ max_)
+
+        continueProbability =
+            1 - 1 / (1 + toFloat average)
+    in
+    { minLength = min_
+    , maxLength = max_
+    , continueProbability = continueProbability
     }
 
 
@@ -359,6 +396,7 @@ list item =
     listWith
         { minLength = Nothing
         , maxLength = Nothing
+        , customAverageLength = Nothing
         }
         item
 
@@ -368,17 +406,21 @@ listOfLength length item =
     listWith
         { minLength = Just length
         , maxLength = Just length
+        , customAverageLength = Just length
         }
         item
 
 
 listWith :
-    { minLength : Maybe Int, maxLength : Maybe Int }
+    { minLength : Maybe Int
+    , maxLength : Maybe Int
+    , customAverageLength : Maybe Int
+    }
     -> Fuzzer a
     -> Fuzzer (List a)
 listWith range itemFuzzer =
     let
-        { minLength, maxLength } =
+        { minLength, maxLength, continueProbability } =
             convertIntRange range
     in
     if minLength > maxLength then
@@ -408,7 +450,7 @@ listWith range itemFuzzer =
                         |> andThen (\_ -> constant (List.reverse acc))
 
                 else
-                    weightedBool 0.9
+                    weightedBool continueProbability
                         |> andThen
                             (\coin ->
                                 if coin then
@@ -426,6 +468,7 @@ uniqueList item =
     uniqueListWith
         { minLength = Nothing
         , maxLength = Nothing
+        , customAverageLength = Nothing
         }
         item
 
@@ -435,12 +478,16 @@ uniqueListOfLength length item =
     uniqueListWith
         { minLength = Just length
         , maxLength = Just length
+        , customAverageLength = Just length
         }
         item
 
 
 uniqueListWith :
-    { minLength : Maybe Int, maxLength : Maybe Int }
+    { minLength : Maybe Int
+    , maxLength : Maybe Int
+    , customAverageLength : Maybe Int
+    }
     -> Fuzzer comparable
     -> Fuzzer (List comparable)
 uniqueListWith range item =
@@ -456,6 +503,7 @@ uniqueByList toComparable item =
         toComparable
         { minLength = Nothing
         , maxLength = Nothing
+        , customAverageLength = Nothing
         }
         item
 
@@ -466,18 +514,23 @@ uniqueByListOfLength length toComparable item =
         toComparable
         { minLength = Just length
         , maxLength = Just length
+        , customAverageLength = Just length
         }
         item
 
 
 uniqueByListWith :
     (a -> comparable)
-    -> { minLength : Maybe Int, maxLength : Maybe Int }
+    ->
+        { minLength : Maybe Int
+        , maxLength : Maybe Int
+        , customAverageLength : Maybe Int
+        }
     -> Fuzzer a
     -> Fuzzer (List a)
 uniqueByListWith toComparable range itemFuzzer =
     let
-        { minLength, maxLength } =
+        { minLength, maxLength, continueProbability } =
             convertIntRange range
     in
     if minLength > maxLength then
@@ -511,7 +564,7 @@ uniqueByListWith toComparable range itemFuzzer =
                         |> andThen (\_ -> constant (List.reverse acc))
 
                 else
-                    weightedBool 0.9
+                    weightedBool continueProbability
                         |> andThen
                             (\coin ->
                                 if coin then
@@ -753,6 +806,7 @@ stringWith { minLength, maxLength, charFuzzer } =
     listWith
         { minLength = minLength
         , maxLength = maxLength
+        , customAverageLength = Nothing
         }
         charFuzzer
         |> map String.fromList
@@ -890,22 +944,10 @@ except for +Infinity, -Infinity and NaN.
 -}
 anyNumericFloat : Fuzzer Float
 anyNumericFloat =
-    map3
-        (\highBits lowBits shouldNegate ->
-            let
-                f : Float
-                f =
-                    Float.lexToFloat ( highBits, lowBits )
-            in
-            if shouldNegate then
-                negate f
-
-            else
-                f
-        )
-        int32
-        int32
-        bool
+    anyFloatWith
+        { allowNaN = False
+        , allowInfinities = False
+        }
 
 
 {-| Ranges over all possible floats: [-1.7976931348623157e308, 1.7976931348623157e308]
@@ -938,9 +980,37 @@ anyFloatWith { allowNaN, allowInfinities } =
             List.filter isPermitted Float.nastyFloats
     in
     frequency
-        [ ( 0.2, anyNumericFloat )
+        [ ( 0.2, wellShrinkingFloat { allowInfinities = allowInfinities } )
         , ( 0.8, oneOfValues nastyFloats )
         ]
+
+
+{-| (Cannot generate NaNs.)
+-}
+wellShrinkingFloat : { allowInfinities : Bool } -> Fuzzer Float
+wellShrinkingFloat { allowInfinities } =
+    map3
+        (\highBits lowBits shouldNegate ->
+            let
+                f : Float
+                f =
+                    Float.lexToFloat ( highBits, lowBits )
+            in
+            if shouldNegate then
+                negate f
+
+            else
+                f
+        )
+        int32
+        int32
+        bool
+        |> (if allowInfinities then
+                identity
+
+            else
+                filter (not << isInfinite)
+           )
 
 
 floatWith :
@@ -953,9 +1023,6 @@ floatWith :
 floatWith ({ min, max, allowNaN, allowInfinities } as options) =
     {- TODO if we figure out how to do nextUp and nextDown for IEEE 734 floats,
        we'll be able to do exclodeMin : Bool, excludeMax : Bool
-    -}
-    {- TODO should we filter by `not infinity if not allowInfinities` here too?
-       Seems redundant but Python Hypothesis does it...
     -}
     case ( min, max ) of
         ( Nothing, Nothing ) ->
@@ -996,6 +1063,9 @@ floatWith ({ min, max, allowNaN, allowInfinities } as options) =
 
         ( Just min_, Just max_ ) ->
             if min_ > max_ then
+                reject
+
+            else if isNaN min_ || isNaN max_ || isInfinite min_ || isInfinite max_ then
                 reject
 
             else if min_ == max_ then

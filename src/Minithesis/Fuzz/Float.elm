@@ -38,6 +38,11 @@ lexToFloat ( highBits, lowBits ) =
             mantissaBits =
                 bitsToList ( mantissaHigh, mantissaLow )
         in
+        {- This can generate infinities according to the spec, but not NaNs:
+           exponent 1024 + first bit of mantissa 0 == Infinity
+           exponent 1024 + first bit of mantissa 1 should be NaN
+                                              but instead == Infinity
+        -}
         floatFromParts
             { mantissaBits = mantissaBits
             , unbiasedExponent = exponent - bias
