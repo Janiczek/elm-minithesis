@@ -55,3 +55,9 @@ minithesisTestResult : Int -> TestResult (List Int)
 minithesisTestResult seed =
     Minithesis.run seed findsSmallList
 ```
+
+## Community
+
+There is a small piece of internet dedicated to `elm-minithesis`: [the
+`#elm-minithesis` channel on Incremental Elm
+Discord](https://discord.gg/PC7Ckpg). Come join and hear about updates first!
