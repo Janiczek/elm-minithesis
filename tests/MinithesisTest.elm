@@ -846,7 +846,12 @@ fuzzers =
                 (F.uniqueListOfLength 5 (F.int 1 3))
             , testMinithesis "negative length -> empty list"
                 (F.negativeInt
-                    |> F.andThen (\length -> F.uniqueListOfLength length (F.int 1 10))
+                    |> F.andThen
+                        (\length ->
+                            F.uniqueListOfLength
+                                length
+                                (F.int 1 10)
+                        )
                 )
                 (\list -> list == [])
                 Passes
@@ -925,6 +930,133 @@ fuzzers =
                                 |> F.andThen
                                     (\from ->
                                         F.uniqueListWith
+                                            { minLength = Just from
+                                            , maxLength = Just to
+                                            , customAverageLength = Nothing
+                                            }
+                                            (F.int 1 20)
+                                    )
+                        )
+                )
+            ]
+        , describe "uniqueByList"
+            [ testMinithesis "elements are unique by the key"
+                (F.uniqueByList (modBy 2) F.anyInt)
+                (\list ->
+                    Set.size (Set.fromList (List.map (modBy 2) list))
+                        == List.length list
+                )
+                Passes
+            ]
+        , describe "uniqueByListOfLength"
+            [ testMinithesis "always the specified length"
+                (F.int 0 10
+                    |> F.andThen
+                        (\length ->
+                            F.tuple
+                                (F.constant length)
+                                (F.uniqueByListOfLength length (modBy 2) F.anyInt)
+                        )
+                )
+                (\( length, list ) -> List.length list == length)
+                Passes
+            , testMinithesisRejects "Domain not large enough"
+                (F.uniqueByListOfLength 5 (modBy 2) (F.int 1 5))
+            , testMinithesis "negative length -> empty list"
+                (F.negativeInt
+                    |> F.andThen
+                        (\length ->
+                            F.uniqueByListOfLength
+                                length
+                                (modBy 2)
+                                (F.int 1 10)
+                        )
+                )
+                (\list -> list == [])
+                Passes
+            ]
+        , describe "uniqueByListWith"
+            [ testMinithesis "empty list"
+                (F.uniqueByListWith
+                    (modBy 2)
+                    { minLength = Nothing
+                    , maxLength = Just 0
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 2)
+                )
+                (\list -> List.isEmpty list)
+                Passes
+            , testMinithesis "single item list"
+                (F.uniqueByListWith
+                    (modBy 2)
+                    { minLength = Just 1
+                    , maxLength = Just 1
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 1)
+                )
+                (\list -> List.length list == 1)
+                Passes
+            , testMinithesisCanGenerateSatisfying "one to three items: 1"
+                (F.uniqueByListWith
+                    (modBy 3)
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 10)
+                )
+                (\list -> List.length list == 1)
+            , testMinithesisCanGenerateSatisfying "one to three items: 2"
+                (F.uniqueByListWith
+                    (modBy 3)
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 10)
+                )
+                (\list -> List.length list == 2)
+            , testMinithesisCanGenerateSatisfying "one to three items: 3"
+                (F.uniqueByListWith
+                    (modBy 3)
+                    { minLength = Just 1
+                    , maxLength = Just 3
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 10)
+                )
+                (\list -> List.length list == 3)
+            , testMinithesis "if given wiggling space does what it can"
+                (F.uniqueByListWith
+                    (modBy 2)
+                    { minLength = Just 1
+                    , maxLength = Nothing
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 1)
+                )
+                (\list -> List.length list == 1)
+                Passes
+            , testMinithesisRejects "Domain not large enough"
+                (F.uniqueByListWith
+                    (modBy 2)
+                    { minLength = Just 2
+                    , maxLength = Just 2
+                    , customAverageLength = Nothing
+                    }
+                    (F.int 1 1)
+                )
+            , testMinithesisRejects "min > max"
+                (F.int 0 10
+                    |> F.andThen
+                        (\to ->
+                            F.int (to + 1) (to + 10)
+                                |> F.andThen
+                                    (\from ->
+                                        F.uniqueByListWith
+                                            (modBy 2)
                                             { minLength = Just from
                                             , maxLength = Just to
                                             , customAverageLength = Nothing

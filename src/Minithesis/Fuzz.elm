@@ -62,10 +62,6 @@ module Minithesis.Fuzz exposing
 
 -}
 
-{- TODO write tests for:
-   uniqueByList, uniqueByListOfLength, uniqueByListWith
--}
-
 import Char exposing (Char)
 import List.Extra
 import Minithesis.Fuzz.Float as Float
