@@ -13,6 +13,7 @@ module Minithesis.Fuzz exposing
     , uniqueByList, uniqueByListOfLength, uniqueByListWith
     , map, andMap, map2, map3, map4, map5, map6, map7, map8
     , andThen, constant, reject, filter
+    , lazy
     , oneOf, oneOfValues, frequency, frequencyValues
     {- , exampleRun -}
     )
@@ -58,6 +59,8 @@ module Minithesis.Fuzz exposing
 @docs map, andMap, map2, map3, map4, map5, map6, map7, map8
 
 @docs andThen, constant, reject, filter
+
+@docs lazy
 
 @docs oneOf, oneOfValues, frequency, frequencyValues
 
@@ -822,6 +825,18 @@ filter fn fuzzer =
                 else
                     reject
             )
+
+
+lazy : (() -> Fuzzer a) -> Fuzzer a
+lazy fn =
+    Fuzzer
+        (\testCase ->
+            let
+                (Fuzzer fuzzer) =
+                    fn ()
+            in
+            fuzzer testCase
+        )
 
 
 unit : Fuzzer ()
