@@ -8,7 +8,7 @@ import Minithesis.Stop exposing (Stop(..))
 import Random
 import Set
 import Shrink
-import Test exposing (Test, describe, fuzz, only, test, todo)
+import Test exposing (Test, describe, fuzz, only, skip, test, todo)
 
 
 suite : Test
@@ -1093,12 +1093,24 @@ shrinkers =
         ]
 
 
+{-| <https://github.com/jlink/shrinking-challenge>
+-}
 shrinkingChallenges : Test
 shrinkingChallenges =
     describe "Shrinking challenges"
         -- https://github.com/jlink/shrinking-challenge
         [ todo "Bound 5" -- https://github.com/jlink/shrinking-challenge/blob/main/challenges/bound5.md
-        , todo "Reverse" -- https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md
+        , challengeReverse
         , todo "Large union list" -- https://github.com/jlink/shrinking-challenge/blob/main/challenges/large_union_list.md
         , todo "Calculator" -- https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
         ]
+
+
+{-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md>
+-}
+challengeReverse : Test
+challengeReverse =
+    testMinithesis "Reverse"
+        (F.list F.anyNumericInt)
+        (\list -> list == List.reverse list)
+        (FailsWith [ -2147483648, -2147483647 ])
