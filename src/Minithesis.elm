@@ -103,6 +103,12 @@ defaultOptions =
 
 
 {-| Run a test with the given PRNG seed.
+
+Note: running this function inside elm-test fuzz tests can result in a long
+running time due to elm-test's default `--fuzz 100` parameter and Minithesis'
+default `maxExamples = 100` parameter effectively multiplying: you can end up
+with a lot of value generation attempts with these defaults.
+
 -}
 run : Int -> Test a -> ( String, TestResult a )
 run seed test_ =
