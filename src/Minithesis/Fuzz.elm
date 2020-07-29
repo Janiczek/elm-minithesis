@@ -114,9 +114,17 @@ exampleWithSeed seedInt (Fuzzer fn) =
                 Nothing ->
                     fallbackSeed previousSeed
 
-        go : Int -> Random.Seed -> List a -> List a
-        go i seed acc =
-            if i <= 0 then
+        go : Int -> Int -> Random.Seed -> List a -> List a
+        go tries i seed acc =
+            if tries <= 0 then
+                -- unsuccessful, perhaps it rejects too much
+                go
+                    100
+                    (i - 1)
+                    seed
+                    acc
+
+            else if i <= 0 then
                 acc
 
             else
@@ -124,26 +132,26 @@ exampleWithSeed seedInt (Fuzzer fn) =
                     fn
                         (TestCase.init
                             { seed = seed
-
-                            -- TODO perhaps we can make this a Maybe so that this never hangs?
-                            , maxSize = 1000
+                            , maxSize = 100
                             , prefix = RandomRun.empty
                             }
                         )
                 of
                     Ok ( value, testCase ) ->
                         go
+                            100
                             (i - 1)
                             (nextSeed seed testCase.seed)
                             (value :: acc)
 
                     Err ( _, testCase ) ->
                         go
+                            (tries - 1)
                             i
                             (nextSeed seed testCase.seed)
                             acc
     in
-    go 10 (Random.initialSeed seedInt) []
+    go 100 10 (Random.initialSeed seedInt) []
 
 
 {-| All fuzzers need to somehow go through picking an Int.
@@ -243,6 +251,10 @@ nonnegativeIntGenerator n =
 
 Input probabilities outside the [0..1] range will be clamped to [0..1].
 
+     Fuzz.example (Fuzz.weightedBool 0.75)
+     -->
+     [True,True,False,True,True,False,True,True,True,True]
+
 -}
 weightedBool : Float -> Fuzzer Bool
 weightedBool p =
@@ -292,10 +304,7 @@ forcedChoice n =
             else
                 Ok
                     ( n
-                    , { testCase
-                        | randomRun =
-                            RandomRun.append n testCase.randomRun
-                      }
+                    , { testCase | randomRun = RandomRun.append n testCase.randomRun }
                     )
         )
 
@@ -314,20 +323,33 @@ toBool int_ =
 -- 3) COMPOSITE FUZZERS
 
 
+{-| Returns a Bool, with True and False both picked with the same probability.
+
+     Fuzz.example Fuzz.bool
+     -->
+     [False,True,False,False,True,False,False,True,True,False]
+
+-}
 bool : Fuzzer Bool
 bool =
     oneOfValues [ True, False ]
 
 
-{-| Returns a number in the range [from, to] (inclusive).
+{-| Returns an integer in the range [from, to] (inclusive).
 
-The range of supported values is (Random.minInt, Random.maxInt):
+The range of supported values is
+`[Random.minInt = -2147483648, Random.maxInt = 2147483647]`.
 
-    MFuzz.int -2147483648 2147483647
+     Fuzz.example (Fuzz.int -4 5)
+     -->
+     [5,4,1,5,-4,5,3,2,-2,-1]
+
+Rejects `from > to`.
 
 -}
 int : Int -> Int -> Fuzzer Int
 int from to =
+    -- TODO make it shrink towards zero by using `oneOf [map negate ..., ...]`?
     if from > to then
         reject
 
@@ -337,27 +359,60 @@ int from to =
 
 
 {-| Ranges over all possible integers: [-2147483648, 2147483647]
+
+     Fuzz.example Fuzz.anyNumericInt
+     -->
+     [40734761,724803180,183002667,-764688759,571685512,-765389879,-439862441,-1262912622,1613638464,-799330495]
+
 -}
 anyNumericInt : Fuzzer Int
 anyNumericInt =
     int Random.minInt Random.maxInt
 
 
+{-| Ranges over all positive integers: [1, 2147483647]
+
+     Fuzz.example Fuzz.positiveInt
+     -->
+     [40734763,724803182,183002669,1382794890,571685514,1382093770,1707621208,884571027,1613638466,1348153154]
+
+-}
 positiveInt : Fuzzer Int
 positiveInt =
     int 1 Random.maxInt
 
 
+{-| Ranges over all negative integers: [-2147483648, -1]
+
+     Fuzz.example Fuzz.negativeInt
+     -->
+     [-2106748887,-1422680468,-1964480981,-764688759,-1575798136,-765389879,-439862441,-1262912622,-533845184,-799330495]
+
+-}
 negativeInt : Fuzzer Int
 negativeInt =
     int Random.minInt -1
 
 
+{-| Ranges over all non-positive integers, notably includes zero: [-2147483648, 0]
+
+     Fuzz.example Fuzz.nonpositiveInt
+     -->
+     [-1806606576,-1337922496,-1936610127,-1099841176,-1254731373,-2106748888,-1422680469,-1964480982,-1575798137,-533845185]
+
+-}
 nonpositiveInt : Fuzzer Int
 nonpositiveInt =
     int Random.minInt 0
 
 
+{-| Ranges over all non-negative integers, notably includes zero: [0, 2147483647]
+
+     Fuzz.example Fuzz.nonnegativeInt
+     -->
+     [40734761,724803180,183002667,1382794889,571685512,1382093769,1707621207,884571026,1613638464,1348153153]
+
+-}
 nonnegativeInt : Fuzzer Int
 nonnegativeInt =
     int 0 Random.maxInt
@@ -370,6 +425,11 @@ intInfinity =
 
 {-| Ranges over all possible integers: [-2147483648, 2147483647]
 and also the Int variants of +Infinity, -Infinity and NaN.
+
+     Fuzz.example Fuzz.anyInt
+     -->
+     [-1490358084,-477130762,-1836545270,920695451,210873522,-1448555596,-Infinity,724803180,571685512,-1262912622]
+
 -}
 anyInt : Fuzzer Int
 anyInt =
@@ -391,20 +451,10 @@ int32 =
     int 0 0xFFFFFFFF
 
 
-avg : Float -> Float -> Float
-avg x y =
-    if isInfinite x || isInfinite y then
-        -- TODO maybe deal with the sign? Probably not needed
-        1 / 0
-
-    else
-        (x + y) / 2
-
-
 convertIntRange :
     { minLength : Maybe Int
     , maxLength : Maybe Int
-    , customAverageLength : Maybe Int
+    , customAverageLength : Maybe Float
     }
     ->
         { minLength : Int
@@ -432,14 +482,14 @@ convertIntRange { minLength, maxLength, customAverageLength } =
         average =
             case customAverageLength of
                 Just avg_ ->
-                    toFloat avg_
+                    avg_
 
                 Nothing ->
                     -- Taken from Python Hypothesis (ListStrategy)
                     -- This deals with the cases where max is Infinity
                     min
                         (max (min__ * 2) (min__ + 5))
-                        (avg min__ max__)
+                        ((min__ + max__) / 2)
 
         continueProbability =
             1 - 1 / (1 + average)
@@ -450,6 +500,13 @@ convertIntRange { minLength, maxLength, customAverageLength } =
     }
 
 
+{-| Fuzzes a list of random length, with average length of 5.
+
+     Fuzz.example (Fuzz.list (Fuzz.int 0 5))
+     -->
+     [[0],[2],[],[1,0,1,5],[5,3,0],[3,1,4],[3,0,3,2,2,5],[5,4],[0,1,0,1,2,5,2],[2,0,2,0,2,1,4,1,2,4,0,2,1]]
+
+-}
 list : Fuzzer a -> Fuzzer (List a)
 list item =
     listWith
@@ -460,20 +517,52 @@ list item =
         item
 
 
+{-| Fuzzes a list of given length.
+
+     Fuzz.example (Fuzz.listOfLength 2 (Fuzz.int 0 5))
+     -->
+     [[5,1],[2,1],[2,3],[1,4],[2,0],[2,1],[5,5],[3,0],[2,3],[1,2]]
+
+-}
 listOfLength : Int -> Fuzzer a -> Fuzzer (List a)
 listOfLength length item =
     listWith
         { minLength = Just length
         , maxLength = Just length
-        , customAverageLength = Just length
+        , customAverageLength = Just (toFloat length)
         }
         item
 
 
+{-| Fuzzes a list, giving you options to customize the length distribution.
+
+     Fuzz.exampleWithSeed 10
+        (Fuzz.listWith
+            { minLength = Just 1
+            , maxLength = Just 3
+            , customAverageLength = Nothing
+            }
+            (Fuzz.int 0 5)
+        )
+     -->
+     [[3,0,0],[3,4],[2],[3,0,1],[5],[1,2],[4,2,5],[2,2,4],[3,2],[0,0,0]]
+
+     Fuzz.example
+        (Fuzz.listWith
+            { minLength = Just 1
+            , maxLength = Nothing
+            , customAverageLength = Just 2
+            }
+            Fuzz.char
+        )
+     -->
+     [[3,5,4],[0,3],[2,3],[1],[1],[4,5,5,3,5],[4],[4,3],[1,1,3,5],[1,3,5]]
+
+-}
 listWith :
     { minLength : Maybe Int
     , maxLength : Maybe Int
-    , customAverageLength : Maybe Int
+    , customAverageLength : Maybe Float
     }
     -> Fuzzer a
     -> Fuzzer (List a)
@@ -522,6 +611,14 @@ listWith range itemFuzzer =
         go 0 []
 
 
+{-| Fuzzes a list of random length, guaranteed to contain unique elements, with
+average length of 5 items if the item fuzzer allows that.
+
+     Fuzz.example (Fuzz.uniqueList (Fuzz.int 1 3))
+     -->
+     [[1],[3],[],[3],[],[],[3],[3,2],[3],[1,3,2]]
+
+-}
 uniqueList : Fuzzer comparable -> Fuzzer (List comparable)
 uniqueList item =
     uniqueListWith
@@ -532,20 +629,63 @@ uniqueList item =
         item
 
 
+{-| Fuzzes a list of given length, guaranteed to contain unique elements.
+
+     Fuzz.example (Fuzz.uniqueListOfLength 2 (Fuzz.int 1 3))
+     -->
+     [[3,2],[1,2],[1,2],[3,2],[3,2],[3,1],[3,1],[3,2],[3,1],[2,3]]
+
+Rejects if the item fuzzer cannot satisfy the length requirement.
+
+     Fuzz.example (Fuzz.uniqueListOfLength 3 (Fuzz.int 1 2))
+     -->
+     [] -- can't generate any examples!
+
+-}
 uniqueListOfLength : Int -> Fuzzer comparable -> Fuzzer (List comparable)
 uniqueListOfLength length item =
     uniqueListWith
         { minLength = Just length
         , maxLength = Just length
-        , customAverageLength = Just length
+        , customAverageLength = Just (toFloat length)
         }
         item
 
 
+{-| Fuzzes a list, giving you options to customize the length distribution. The
+list items are guaranteed to be unique.
+
+     Fuzz.example
+        (Fuzz.uniqueListWith
+            { minLength = Just 1
+            , maxLength = Just 3
+            , customAverageLength = Nothing
+            }
+            (Fuzz.int 0 5)
+        )
+     -->
+     [[1],[1],[3,5],[0,2,1],[4],[1,2],[2,1,0],[2,4],[5],[1,3,5]]
+
+     Fuzz.example
+        (Fuzz.uniqueListWith
+            { minLength = Just 1
+            , maxLength = Nothing
+            , customAverageLength = Just 2
+            }
+            (Fuzz.int 0 5)
+        )
+     -->
+     [[1,0],[3,5],[5],[3,5,4],[2],[3,4],[0,2,1],[2,1,0,4],[4],[1,3,5]]
+
+Rejects if `min > max`.
+
+Rejects if it can't satisfy the length requirement.
+
+-}
 uniqueListWith :
     { minLength : Maybe Int
     , maxLength : Maybe Int
-    , customAverageLength : Maybe Int
+    , customAverageLength : Maybe Float
     }
     -> Fuzzer comparable
     -> Fuzzer (List comparable)
@@ -556,6 +696,16 @@ uniqueListWith range item =
         item
 
 
+{-| Fuzzes a list of random length, guaranteed to contain unique elements
+according to the given key function, with average length of 5 items if the item fuzzer
+allows that.
+
+     Fuzz.exampleWithSeed 10
+         (Fuzz.uniqueByList (modBy 2) (Fuzz.int 1 5))
+     -->
+     [[4],[1],[2],[2,1],[3],[],[1],[5],[3],[5]]
+
+-}
 uniqueByList : (a -> comparable) -> Fuzzer a -> Fuzzer (List a)
 uniqueByList toComparable item =
     uniqueByListWith
@@ -567,23 +717,71 @@ uniqueByList toComparable item =
         item
 
 
+{-| Fuzzes a list of given length, guaranteed to contain unique elements
+according to the given key function.
+
+     Fuzz.example (Fuzz.uniqueByListOfLength 2 (modBy 2) (Fuzz.int 1 3))
+     -->
+     [[2,3],[2,3],[3,2],[3,2],[1,2],[1,2],[3,2],[3,2],[3,2],[2,3]]
+
+Rejects if the item fuzzer cannot satisfy the length requirement combined with
+the key function.
+
+     Fuzz.example (Fuzz.uniqueListOfLength 3 (modBy 2) (Fuzz.int 1 3))
+     -->
+     [] -- can't generate any examples!
+
+-}
 uniqueByListOfLength : Int -> (a -> comparable) -> Fuzzer a -> Fuzzer (List a)
 uniqueByListOfLength length toComparable item =
     uniqueByListWith
         toComparable
         { minLength = Just length
         , maxLength = Just length
-        , customAverageLength = Just length
+        , customAverageLength = Just (toFloat length)
         }
         item
 
 
+{-| Fuzzes a list, giving you options to customize the length distribution. The
+list items are guaranteed to be unique according to the given key function.
+
+     Fuzz.example
+        (Fuzz.uniqueByListWith
+            (modBy 3)
+            { minLength = Just 1
+            , maxLength = Just 3
+            , customAverageLength = Nothing
+            }
+            (Fuzz.int 0 5)
+        )
+     -->
+     [[1],[1],[3,5],[0,2,1],[4],[1,2],[2,1,0],[2,4],[5],[1,3,5]]
+
+     Fuzz.example
+        (Fuzz.uniqueByListWith
+            (modBy 2)
+            { minLength = Just 1
+            , maxLength = Just 3
+            , customAverageLength = Nothing
+            }
+            (Fuzz.int 0 5)
+        )
+     -->
+     [[4],[0],[0,5],[2],[3,0],[0,3],[2],[4],[4],[1,2]]
+
+Rejects if `min > max`.
+
+Rejects if it can't satisfy the length requirement combined with the key
+function.
+
+-}
 uniqueByListWith :
     (a -> comparable)
     ->
         { minLength : Maybe Int
         , maxLength : Maybe Int
-        , customAverageLength : Maybe Int
+        , customAverageLength : Maybe Float
         }
     -> Fuzzer a
     -> Fuzzer (List a)
@@ -636,21 +834,73 @@ uniqueByListWith toComparable range itemFuzzer =
         go Set.empty 0 []
 
 
+{-| Combines the two fuzzers into a tuple.
+
+     Fuzz.example (Fuzz.tuple Fuzz.char (Fuzz.int 0 10))
+     -->
+     [('g',7),('>',7),('2',4),('S',9),('G',7),('2',3),('`',3),('L',4),('{',6),('n',0)]
+
+-}
 tuple : Fuzzer a -> Fuzzer b -> Fuzzer ( a, b )
 tuple a b =
     map2 Tuple.pair a b
 
 
+{-| Combines the three fuzzers into a 3-tuple.
+
+     Fuzz.example (Fuzz.tuple Fuzz.char (Fuzz.int 0 10) Fuzz.bool)
+     -->
+     [('(',7,True),('-',4,False),('}',3,True),('I',7,False),('D',4,False),('2',9,False),('H',0,False),('2',3,False),('9',1,False),('{',0,False)]
+
+-}
 tuple3 : Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer ( a, b, c )
 tuple3 a b c =
     map3 (\ax bx cx -> ( ax, bx, cx )) a b c
 
 
+{-| A fuzzer that always generates the given value.
+
+     Fuzz.example (Fuzz.constant 42)
+     -->
+     [42,42,42,42,42,42,42,42,42,42]
+
+If you think of the Fuzzer type as `Random.Seed -> Maybe a`, the `constant`
+function is how you create `Just` values. (See also `reject`.)
+
+So you can use `constant` in similar patterns as you'd do with
+`Json.Decode.succeed` etc.
+
+-}
 constant : a -> Fuzzer a
 constant a =
     Fuzzer (\testCase -> Ok ( a, testCase ))
 
 
+{-| A fuzzer that always fails generating a value.
+
+     Fuzz.example Fuzz.reject
+     -->
+     [] -- fails generating a value
+
+If you think of the Fuzzer type as `Random.Seed -> Maybe a`, the `reject`
+function is how you create `Nothing` values. (See also `constant`.)
+
+So you can use `reject` in similar patterns as you'd do with `Json.Decode.fail`
+etc.
+
+-}
+reject : Fuzzer a
+reject =
+    Fuzzer (TestCase.markStatus Invalid)
+
+
+{-| Convert a fuzzed value with a given function.
+
+     Fuzz.example (Fuzz.map (\x -> x * 1000) (Fuzz.int 1 5))
+     -->
+     [5000,4000,1000,5000,1000,5000,3000,2000,3000,4000]
+
+-}
 map : (a -> b) -> Fuzzer a -> Fuzzer b
 map fn (Fuzzer fuzzer) =
     Fuzzer
@@ -660,6 +910,13 @@ map fn (Fuzzer fuzzer) =
         )
 
 
+{-| Combine two fuzzed values using a given function.
+
+     Fuzz.example (Fuzz.map2 (\a b -> a * b) (Fuzz.int 1 5) (Fuzz.int 1 5)
+     -->
+     [10,2,16,6,5,20,5,5,6,12]
+
+-}
 map2 : (a -> b -> c) -> Fuzzer a -> Fuzzer b -> Fuzzer c
 map2 fn (Fuzzer fuzzerA) (Fuzzer fuzzerB) =
     Fuzzer
@@ -673,6 +930,12 @@ map2 fn (Fuzzer fuzzerA) (Fuzzer fuzzerB) =
         )
 
 
+{-| Combine three fuzzed values using a given function.
+
+Handy for record creation if you don't want to use the
+`constant ... |> andMap ...` pattern.
+
+-}
 map3 : (a -> b -> c -> d) -> Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer d
 map3 fn a b c =
     constant fn
@@ -681,6 +944,12 @@ map3 fn a b c =
         |> andMap c
 
 
+{-| Combine four fuzzed values using a given function.
+
+Handy for record creation if you don't want to use the
+`constant ... |> andMap ...` pattern.
+
+-}
 map4 : (a -> b -> c -> d -> e) -> Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer d -> Fuzzer e
 map4 fn a b c d =
     constant fn
@@ -690,6 +959,12 @@ map4 fn a b c d =
         |> andMap d
 
 
+{-| Combine five fuzzed values using a given function.
+
+Handy for record creation if you don't want to use the
+`constant ... |> andMap ...` pattern.
+
+-}
 map5 : (a -> b -> c -> d -> e -> f) -> Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer d -> Fuzzer e -> Fuzzer f
 map5 fn a b c d e =
     constant fn
@@ -700,6 +975,12 @@ map5 fn a b c d e =
         |> andMap e
 
 
+{-| Combine six fuzzed values using a given function.
+
+Handy for record creation if you don't want to use the
+`constant ... |> andMap ...` pattern.
+
+-}
 map6 : (a -> b -> c -> d -> e -> f -> g) -> Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer d -> Fuzzer e -> Fuzzer f -> Fuzzer g
 map6 fn a b c d e f =
     constant fn
@@ -711,6 +992,12 @@ map6 fn a b c d e f =
         |> andMap f
 
 
+{-| Combine seven fuzzed values using a given function.
+
+Handy for record creation if you don't want to use the
+`constant ... |> andMap ...` pattern.
+
+-}
 map7 : (a -> b -> c -> d -> e -> f -> g -> h) -> Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer d -> Fuzzer e -> Fuzzer f -> Fuzzer g -> Fuzzer h
 map7 fn a b c d e f g =
     constant fn
@@ -723,6 +1010,27 @@ map7 fn a b c d e f g =
         |> andMap g
 
 
+{-| Combine eight fuzzed values using a given function.
+
+Handy for record creation if you don't want to use the
+`constant ... |> andMap ...` pattern.
+
+If you have a record with more than eight fields, don't worry: you can still
+fuzz them!
+
+    Fuzz.constant MyRecord
+        |> Fuzz.andMap firstFieldFuzzer
+        |> Fuzz.andMap secondFieldFuzzer
+        |> Fuzz.andMap thirdFieldFuzzer
+        |> Fuzz.andMap fourthFieldFuzzer
+        |> Fuzz.andMap fifthFieldFuzzer
+        |> Fuzz.andMap sixthFieldFuzzer
+        |> Fuzz.andMap seventhFieldFuzzer
+        |> Fuzz.andMap eighthFieldFuzzer
+        |> Fuzz.andMap ninthFieldFuzzer
+        |> ...
+
+-}
 map8 : (a -> b -> c -> d -> e -> f -> g -> h -> i) -> Fuzzer a -> Fuzzer b -> Fuzzer c -> Fuzzer d -> Fuzzer e -> Fuzzer f -> Fuzzer g -> Fuzzer h -> Fuzzer i
 map8 fn a b c d e f g h =
     constant fn
@@ -736,11 +1044,46 @@ map8 fn a b c d e f g h =
         |> andMap h
 
 
+{-| Generate a value and apply a wrapped function to it.
+
+Handy for working with functions that have many arguments (typically record
+constructors). See the example in `map8`.
+
+-}
 andMap : Fuzzer a -> Fuzzer (a -> b) -> Fuzzer b
 andMap =
     map2 (|>)
 
 
+{-| Use a generated value to decide what fuzzer to use next.
+
+For example, let's say you want to generate a list of given length.
+One possible way to do that is first choosing how many elements will there be
+(generating a number), `andThen` generating a list with that many items:
+
+    Fuzz.int 1 10
+        |> Fuzz.andThen
+            (\length ->
+                let
+                    go : Int -> List a -> Fuzzer (List a)
+                    go todo acc =
+                        if todo <= 0 then
+                            constant (List.reverse acc)
+
+                        else
+                            itemFuzzer
+                                |> Fuzz.andThen (\item -> go (length - 1) (item :: acc))
+                in
+                go length []
+            )
+
+(By the way, it will probably be better to just use one of the `list` helpers in
+this module.)
+
+Think of it as generalization of `map`. Inside `map` you don't have the option
+to fuzz another value based on what you already have; inside `andThen` you do.
+
+-}
 andThen : (a -> Fuzzer b) -> Fuzzer a -> Fuzzer b
 andThen fn (Fuzzer fuzzer) =
     Fuzzer
@@ -757,11 +1100,25 @@ andThen fn (Fuzzer fuzzer) =
         )
 
 
-reject : Fuzzer a
-reject =
-    Fuzzer (TestCase.markStatus Invalid)
+{-| Only accept values satisfying the given predicate function.
 
+     Fuzz.example
+        (Fuzz.int 0 10
+            |> Fuzz.filter (\x -> modBy 2 x == 0)
+        )
+     -->
+     [4,4,10,0,0,4,4,6,0,6]
 
+Note that it's often better to get to your wanted values using `map`:
+
+     Fuzz.example
+        (Fuzz.int 0 5
+            |> Fuzz.map (\x -> x * 2)
+        )
+     -->
+     [2,4,10,10,0,6,6,4,4,2]
+
+-}
 filter : (a -> Bool) -> Fuzzer a -> Fuzzer a
 filter fn fuzzer =
     {- TODO Hypothesis tries three times - and what then? Does it sidestep the
@@ -778,6 +1135,30 @@ filter fn fuzzer =
             )
 
 
+{-| A trick for writing recursive fuzzers. Wrap the fuzzer into a
+`Fuzzer.lazy (\_ -> ...)` lambda like this:
+
+    exprFuzzer : Fuzzer Expr
+    exprFuzzer =
+        Fuzz.frequency
+            [ ( 5, Fuzz.map Int Fuzz.anyNumericInt )
+            , ( 1
+              , Fuzz.map2 Plus
+                    (F.lazy (\_ -> exprFuzzer))
+                    (F.lazy (\_ -> exprFuzzer))
+              )
+            , ( 1
+              , Fuzz.map2 Div
+                    (F.lazy (\_ -> exprFuzzer))
+                    (F.lazy (\_ -> exprFuzzer))
+              )
+            ]
+
+Note the fuzzer has to be defined as a top-level declaration and not inside a
+`let..in` expression, else Elm compiler will still complain about a value
+depending on itself.
+
+-}
 lazy : (() -> Fuzzer a) -> Fuzzer a
 lazy fn =
     Fuzzer
@@ -790,30 +1171,47 @@ lazy fn =
         )
 
 
+{-| Fuzzer always returning the unit value `()`.
+
+     Fuzz.example Fuzz.unit
+     -->
+     [ (), (), (), (), (), (), (), (), (), () ]
+
+-}
 unit : Fuzzer ()
 unit =
     constant ()
 
 
-{-| A fuzzer for Char values. Generates random ASCII chars disregarding the control
-characters and the extended character set.
+{-| A fuzzer for Char values. Generates random ASCII chars disregarding the
+control characters and the extended character set.
 
 The range used for the char codes is 32 to 126.
+
+     Fuzz.example Fuzz.char
+     -->
+     ['~','2','u','`','9','L','\'','{','\'','n']
 
 -}
 char : Fuzzer Char
 char =
+    -- TODO prefer whitespace?
     charRange 32 126
 
 
 {-| A fuzzer for Char values. Generates random Unicode characters (even
-surrogate pairs).
+surrogate pairs, but never surrogates themselves). Mostly garbage.
 
 The range used for the char codes is 0 to 1114111 (0x10FFFF).
+
+     Fuzz.example Fuzz.anyChar
+     -->
+     ['છ','󐅳','񹬫','򔇞','廤','򌠫','񇸀','𙑚','򼦆','򵟵']
 
 -}
 anyChar : Fuzzer Char
 anyChar =
+    -- TODO prefer ASCII and whitespace to unicode?
     charRange 0 maxChar
 
 
@@ -824,11 +1222,21 @@ maxChar =
 
 {-| Use your own char code range for Char generation!
 
-    charRange 48 57 -- will generate chars from '0' to '9'
+     Fuzz.example (Fuzz.charRange 48 57)
+     -->
+     ['9','8','5','9','0','9','7','6','2','3'] -- 0-9
 
-    charRange 65 90 -- will generate chars from 'A' to 'Z'
+     Fuzz.example (Fuzz.charRange 65 90)
+     -->
+     ['N','I','B','V','G','R','T','O','U','J'] -- A-Z
 
-    charRange 97 122 -- will generate chars from 'a' to 'z'
+     Fuzz.example (Fuzz.charRange 97 122)
+     -->
+     ['n','i','b','v','g','r','t','o','u','j'] -- a-z
+
+Rejects if `from > to`.
+Rejects if `from < 0 || to < 0`.
+Rejects if `from > 0x10FFFF || to > 0x10FFFF`.
 
 -}
 charRange : Int -> Int -> Fuzzer Char
@@ -847,12 +1255,15 @@ charRange from to =
 
 isSurrogate : Int -> Bool
 isSurrogate charCode =
+    -- For these, `charCode |> Char.fromCode |> Char.toCode == NaN`
     charCode >= 0xD800 && charCode <= 0xDFFF
 
 
-{-| Generates random printable ASCII strings of up to 1000 characters.
+{-| Generates random printable ASCII strings, with average length of 5.
 
-Shorter strings are more common, especially the empty string.
+     Fuzz.example Fuzz.string
+     -->
+     ["x","I","","6a=U",";W?","uDc",":ei_^~","=Y","-NAT\\QJ","{92H2DI}-(KOc"]
 
 -}
 string : Fuzzer String
@@ -861,28 +1272,76 @@ string =
         |> map String.fromList
 
 
+{-| Generates random printable ASCII strings of the given length.
+
+     Fuzz.example (Fuzz.stringOfLength 2)
+     -->
+     ["g)",">D","2P","SE","GH","2~","`u","L9","{'","n'"]
+
+-}
 stringOfLength : Int -> Fuzzer String
 stringOfLength length =
     listOfLength length char
         |> map String.fromList
 
 
+{-| Fuzzes a string, giving you options to customize the length distribution and
+the internal char fuzzer.
+
+     Fuzz.example
+        (Fuzz.stringWith
+            { minLength = Just 1
+            , maxLength = Just 3
+            , customAverageLength = Nothing
+            , charFuzzer = Fuzz.char
+            }
+        )
+     -->
+     ["`","n","9p","KOc","(","}-",">)U","GE","u","n'`"]
+
+     Fuzz.example
+        (Fuzz.stringWith
+            { minLength = Just 1
+            , maxLength = Nothing
+            , customAverageLength = Just 2
+            , charFuzzer = Fuzz.charRange 48 57
+            }
+        )
+     -->
+     ["392","25","81","9","3","85555","8","67","9131","379"]
+
+-}
 stringWith :
     { minLength : Maybe Int
     , maxLength : Maybe Int
+    , customAverageLength : Maybe Float
     , charFuzzer : Fuzzer Char
     }
     -> Fuzzer String
-stringWith { minLength, maxLength, charFuzzer } =
+stringWith { minLength, maxLength, customAverageLength, charFuzzer } =
     listWith
         { minLength = minLength
         , maxLength = maxLength
-        , customAverageLength = Nothing
+        , customAverageLength = customAverageLength
         }
         charFuzzer
         |> map String.fromList
 
 
+{-| Picks a fuzzer from the list and runs it. All fuzzers have the same chance
+to be picked.
+
+     Fuzz.exampleWithSeed 3
+        (Fuzz.oneOf
+            [ Fuzz.int 10 19
+            , Fuzz.int 50 59 |> Fuzz.map negate
+            , Fuzz.int 90 99
+            ]
+        )
+     -->
+     [-51,-59,12,92,13,91,16,92,14,-57]
+
+-}
 oneOf : List (Fuzzer a) -> Fuzzer a
 oneOf fuzzers =
     case List.length fuzzers of
@@ -903,26 +1362,47 @@ oneOf fuzzers =
                     )
 
 
+{-| Picks a value from the list. All values have the same chance to be picked.
+
+     Fuzz.example (Fuzz.oneOfValues [ 42, 999, 1 ])
+     -->
+     [999,1,1,1,42,42,42,1,1,999]
+
+-}
 oneOfValues : List a -> Fuzzer a
 oneOfValues items =
-    case List.length items of
-        0 ->
-            reject
-
-        length ->
-            int 0 (length - 1)
-                |> andThen
-                    (\i ->
-                        case List.head (List.drop i items) of
-                            Nothing ->
-                                -- shouldn't be possible
-                                reject
-
-                            Just item ->
-                                constant item
-                    )
+    oneOf (List.map constant items)
 
 
+{-| A more general version of `oneOf`.
+
+Picks a fuzzer from the list and runs it. The chance to be picked is given for
+each fuzzer as a weight.
+
+     Fuzz.example
+        (Fuzz.frequency
+            [ (10, Fuzz.int 10 19)
+            , (5, Fuzz.int 50 59 |> Fuzz.map negate)
+            , (1, Fuzz.int 90 99)
+            ]
+        )
+     -->
+     [-58,18,13,16,11,18,-50,-58,10,-56]
+
+The weight doesn't need to be integer, nor does the sum of them have to equal to
+1:
+
+     Fuzz.example
+        (Fuzz.frequency
+            [ (1, Fuzz.int 10 19)
+            , (0.5, Fuzz.int 50 59 |> Fuzz.map negate)
+            , (0.1, Fuzz.int 90 99)
+            ]
+        )
+     -->
+     [-58,18,13,16,11,18,-50,-58,10,-56]
+
+-}
 frequency : List ( Float, Fuzzer a ) -> Fuzzer a
 frequency options =
     let
@@ -969,11 +1449,47 @@ frequency options =
                 )
 
 
+{-| A more general version of `oneOfValues`.
+
+Picks a value from the list. The chance to be picked is given for each value as
+a weight.
+
+     Fuzz.example
+        (Fuzz.frequencyValues
+            [ (10, 42)
+            , (5, 999)
+            , (1, 1)
+            ]
+        )
+     -->
+     [42,42,42,42,42,42,999,42,42,999]
+
+The weight doesn't need to be integer, nor does the sum of them have to equal to
+1:
+
+     Fuzz.example
+        (Fuzz.frequencyValues
+            [ (1, 42)
+            , (0.5, 999)
+            , (0.1, 1)
+            ]
+        )
+     -->
+     [42,42,42,42,42,42,999,42,42,999]
+
+-}
 frequencyValues : List ( Float, a ) -> Fuzzer a
 frequencyValues options =
     frequency (List.map (Tuple.mapSecond constant) options)
 
 
+{-| Randomly returns Nothing or wraps the fuzzed value in Just.
+
+     Fuzz.example (Fuzz.maybe Fuzz.char)
+     -->
+     [Nothing,Just 'E',Nothing,Just 'G',Nothing,Just 'u',Nothing,Just 'L',Nothing,Just '\'']
+
+-}
 maybe : Fuzzer a -> Fuzzer (Maybe a)
 maybe item =
     -- The order here is important: we shrink to the items earlier in the list
@@ -983,6 +1499,14 @@ maybe item =
         ]
 
 
+{-| Randomly chooses between returning an error value (Err) or a success value
+(Ok).
+
+     Fuzz.example (Fuzz.result Fuzz.bool Fuzz.char)
+     -->
+     [Ok ')',Err False,Err False,Ok 'E',Err True,Err False,Ok 'u',Ok '9',Err False,Ok '\'']
+
+-}
 result : Fuzzer x -> Fuzzer a -> Fuzzer (Result x a)
 result errFuzzer okFuzzer =
     oneOf
@@ -991,7 +1515,12 @@ result errFuzzer okFuzzer =
         ]
 
 
-{-| Returns Float in range 0..1 inclusive (uniform distribution).
+{-| Returns Float in range 0..1 inclusive.
+
+     Fuzz.example Fuzz.probability
+     -->
+     [0.0857102531109948,0.10466259812416492,0.20333718837701903,0.10971943162142586,0.394916603751272,0.22617770145826405,0.7359710146032609,0.06733096418943953,0.5926689124932717,0.69903743334244]
+
 -}
 probability : Fuzzer Float
 probability =
@@ -999,8 +1528,21 @@ probability =
         |> map Float.fractionalFloat
 
 
+{-| Returns a float in the range [from, to] (inclusive).
+
+The range of supported values is
+`[-1.7976931348623157e308, 1.7976931348623157e308]`.
+
+     Fuzz.example (Fuzz.float 10 20)
+     -->
+     [10.857102531109948,11.046625981241649,12.03337188377019,11.097194316214258,13.94916603751272,12.261777014582641,17.359710146032608,10.673309641894395,15.926689124932718,16.9903743334244]
+
+Rejects `from > to`.
+
+-}
 float : Float -> Float -> Fuzzer Float
 float from to =
+    -- TODO can this shrink to the nice integer-y floats?
     floatWith
         { min = Just from
         , max = Just to
@@ -1011,6 +1553,15 @@ float from to =
 
 {-| Ranges over all possible floats: [-1.7976931348623157e308, 1.7976931348623157e308]
 except for +Infinity, -Infinity and NaN.
+
+Prefers nice non-fractional floats and shrinks to them.
+
+Also sprinkles some nasty edge-case floats in for good measure.
+
+     Fuzz.example Fuzz.anyNumericFloat
+     -->
+     [-1.1,9007199254740992,2.2250738585072014e-308,-2.220446049250313e-16,627908,-3.5502481189047345e+60,-1.192092896e-7,0.00001,-10000000,-1.192092896e-7]
+
 -}
 anyNumericFloat : Fuzzer Float
 anyNumericFloat =
@@ -1022,6 +1573,15 @@ anyNumericFloat =
 
 {-| Ranges over all possible floats: [-1.7976931348623157e308, 1.7976931348623157e308]
 and also the +Infinity, -Infinity and NaN.
+
+Prefers nice non-fractional floats and shrinks to them.
+
+Also sprinkles some nasty edge-case floats in for good measure.
+
+     Fuzz.example Fuzz.anyFloat
+     -->
+     [Infinity,1.1,-1.192092896e-7,-Infinity,627908,-3.5502481189047345e+60,Infinity,-Infinity,NaN,NaN]
+
 -}
 anyFloat : Fuzzer Float
 anyFloat =
@@ -1031,27 +1591,38 @@ anyFloat =
         }
 
 
-nanOrInfiniteFloat : { allowNaN : Bool, allowInfinities : Bool } -> Fuzzer Float
-nanOrInfiniteFloat { allowNaN, allowInfinities } =
-    if allowNaN && allowInfinities then
-        oneOfValues
-            [ 1 / 0
-            , -1 / 0
-            , 0 / 0
-            ]
+nanOrInfiniteFloat :
+    { nan : Bool
+    , positiveInfinity : Bool
+    , negativeInfinity : Bool
+    }
+    -> Fuzzer Float
+nanOrInfiniteFloat { nan, positiveInfinity, negativeInfinity } =
+    [ if nan then
+        Just (0 / 0)
 
-    else if allowNaN then
-        constant (0 / 0)
+      else
+        Nothing
+    , if positiveInfinity then
+        Just (1 / 0)
 
-    else
-        oneOfValues
-            [ 1 / 0
-            , -1 / 0
-            ]
+      else
+        Nothing
+    , if negativeInfinity then
+        Just (-1 / 0)
+
+      else
+        Nothing
+    ]
+        |> List.filterMap identity
+        |> oneOfValues
 
 
 anyFloatWith : { allowNaN : Bool, allowInfinities : Bool } -> Fuzzer Float
 anyFloatWith { allowNaN, allowInfinities } =
+    {- TODO should we expose this?
+       Make sense of the floats hieararchy and what shrinks how.
+    -}
     let
         isPermitted : Float -> Bool
         isPermitted f =
@@ -1068,9 +1639,9 @@ anyFloatWith { allowNaN, allowInfinities } =
         nastyFloats =
             List.filter isPermitted Float.nastyFloats
     in
-    frequency
-        [ ( 0.5, wellShrinkingFloat { allowInfinities = allowInfinities } )
-        , ( 0.5, oneOfValues nastyFloats )
+    oneOf
+        [ wellShrinkingFloat { allowInfinities = allowInfinities }
+        , oneOfValues nastyFloats
         ]
 
 
@@ -1102,6 +1673,38 @@ wellShrinkingFloat { allowInfinities } =
            )
 
 
+scaledFloat : Float -> Float -> Fuzzer Float
+scaledFloat min max =
+    if min > max then
+        reject
+
+    else
+        probability
+            |> map (\f -> f * (max - min) + min)
+            {- TODO Infinite values can happen for the above calculation
+               eg. in case of
+                   min = -1.7976931348623157e+308
+                   max =  1.7976931348623157e+308
+               Do we have a better way to generate these floats?
+            -}
+            |> filter (not << isInfinite)
+
+
+{-| Fuzzes a float, giving you the options to customize the range and presence
+of certain edge-case values.
+
+     Fuzz.example
+        (Fuzz.floatWith
+            { min = Nothing
+            , max = Just 0
+            , allowNaN = False
+            , allowInfinities = True
+            }
+        )
+     -->
+     [-Infinity,-3.3348079349305726e+293,-865864,-377335,-1.7976931348623157e+308,-3.5502481189047345e+60,-Infinity,-Infinity,0,-70601]
+
+-}
 floatWith :
     { min : Maybe Float
     , max : Maybe Float
@@ -1110,9 +1713,22 @@ floatWith :
     }
     -> Fuzzer Float
 floatWith { min, max, allowNaN, allowInfinities } =
+    -- TODO add nasty floats to config of this function?
     {- TODO if we figure out how to do nextUp and nextDown for IEEE 734 floats,
-       we'll be able to do exclodeMin : Bool, excludeMax : Bool
+       we'll be able to do excludeMin : Bool, excludeMax : Bool
     -}
+    let
+        canGenerateNanOrInfiniteFloat : Bool
+        canGenerateNanOrInfiniteFloat =
+            allowNaN
+                || (allowInfinities
+                        && ((min == Just (-1 / 0))
+                                || (min == Nothing)
+                                || (max == Just (1 / 0))
+                                || (max == Nothing)
+                           )
+                   )
+    in
     case ( min, max ) of
         ( Nothing, Nothing ) ->
             anyFloatWith
@@ -1122,30 +1738,42 @@ floatWith { min, max, allowNaN, allowInfinities } =
 
         ( Just min_, Nothing ) ->
             if min_ < 0 then
-                oneOf
-                    [ map abs anyNumericFloat
-                    , floatWith
-                        { min = Just min_
-                        , max = Just -0.0
-                        , allowNaN = allowNaN
-                        , allowInfinities = allowInfinities
-                        }
-                    ]
+                [ Just <| map abs anyNumericFloat
+                , Just <| scaledFloat min_ -0.0
+                , if canGenerateNanOrInfiniteFloat then
+                    Just <|
+                        nanOrInfiniteFloat
+                            { positiveInfinity = True
+                            , negativeInfinity = min_ == (-1 / 0)
+                            , nan = allowNaN
+                            }
+
+                  else
+                    Nothing
+                ]
+                    |> List.filterMap identity
+                    |> oneOf
 
             else
                 map (\f -> min_ + abs f) anyNumericFloat
 
         ( Nothing, Just max_ ) ->
             if max_ >= 0 then
-                oneOf
-                    [ floatWith
-                        { min = Just 0.0
-                        , max = Just max_
-                        , allowNaN = allowNaN
-                        , allowInfinities = allowInfinities
-                        }
-                    , map (abs >> negate) anyNumericFloat
-                    ]
+                [ Just <| scaledFloat 0.0 max_
+                , Just <| map (abs >> negate) anyNumericFloat
+                , if canGenerateNanOrInfiniteFloat then
+                    Just <|
+                        nanOrInfiniteFloat
+                            { positiveInfinity = max_ == (1 / 0)
+                            , negativeInfinity = True
+                            , nan = allowNaN
+                            }
+
+                  else
+                    Nothing
+                ]
+                    |> List.filterMap identity
+                    |> oneOf
 
             else
                 map (\f -> max_ - abs f) anyNumericFloat
@@ -1160,23 +1788,15 @@ floatWith { min, max, allowNaN, allowInfinities } =
             else if min_ == max_ then
                 constant min_
 
-            else
-                let
-                    scaledFloat : Fuzzer Float
-                    scaledFloat =
-                        probability
-                            |> map (\f -> f * (max_ - min_) + min_)
-                in
-                if allowNaN || allowInfinities then
-                    frequency
-                        [ ( 0.5, scaledFloat )
-                        , ( 0.5
-                          , nanOrInfiniteFloat
-                                { allowNaN = allowNaN
-                                , allowInfinities = allowInfinities
-                                }
-                          )
-                        ]
+            else if canGenerateNanOrInfiniteFloat then
+                oneOf
+                    [ scaledFloat min_ max_
+                    , nanOrInfiniteFloat
+                        { positiveInfinity = max_ == (1 / 0)
+                        , negativeInfinity = min_ == (-1 / 0)
+                        , nan = allowNaN
+                        }
+                    ]
 
-                else
-                    scaledFloat
+            else
+                scaledFloat min_ max_

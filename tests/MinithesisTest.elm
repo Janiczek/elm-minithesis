@@ -355,39 +355,67 @@ fuzzers =
             ]
         , describe "floatWith"
             [ testMinithesisCanGenerateSatisfying "NaN if allowNaN = True"
-                (F.floatWith
-                    { min = Nothing
-                    , max = Nothing
-                    , allowNaN = True
-                    , allowInfinities = False
-                    }
+                (F.tuple3
+                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyNumericFloat)
+                    F.bool
+                    |> F.andThen
+                        (\( min, max, infinities ) ->
+                            F.floatWith
+                                { min = min
+                                , max = max
+                                , allowNaN = True
+                                , allowInfinities = infinities
+                                }
+                        )
                 )
                 isNaN
             , testMinithesisCannotGenerateSatisfying "NaN if allowNaN = False"
-                (F.floatWith
-                    { min = Nothing
-                    , max = Nothing
-                    , allowNaN = False
-                    , allowInfinities = False
-                    }
+                (F.tuple3
+                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyNumericFloat)
+                    F.bool
+                    |> F.andThen
+                        (\( min, max, infinities ) ->
+                            F.floatWith
+                                { min = min
+                                , max = max
+                                , allowNaN = False
+                                , allowInfinities = infinities
+                                }
+                        )
                 )
                 isNaN
             , testMinithesisCanGenerateSatisfying "infinities if allowInfinities = True"
-                (F.floatWith
-                    { min = Nothing
-                    , max = Nothing
-                    , allowNaN = False
-                    , allowInfinities = True
-                    }
+                (F.tuple3
+                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyNumericFloat)
+                    F.bool
+                    |> F.andThen
+                        (\( min, max, nan ) ->
+                            F.floatWith
+                                { min = min
+                                , max = max
+                                , allowNaN = nan
+                                , allowInfinities = True
+                                }
+                        )
                 )
                 isInfinite
             , testMinithesisCannotGenerateSatisfying "infinities if allowInfinities = False"
-                (F.floatWith
-                    { min = Nothing
-                    , max = Nothing
-                    , allowNaN = False
-                    , allowInfinities = False
-                    }
+                (F.tuple3
+                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyNumericFloat)
+                    F.bool
+                    |> F.andThen
+                        (\( min, max, nan ) ->
+                            F.floatWith
+                                { min = min
+                                , max = max
+                                , allowNaN = nan
+                                , allowInfinities = False
+                                }
+                        )
                 )
                 isInfinite
             , testMinithesis "Full range"
@@ -405,14 +433,28 @@ fuzzers =
                     |> F.andThen
                         (\min ->
                             F.tuple
-                                (F.constant min)
-                                (F.floatWith
-                                    { min = Just min
-                                    , max = Nothing
-                                    , allowNaN = False
-                                    , allowInfinities = False
-                                    }
+                                (F.maybe
+                                    (F.floatWith
+                                        { min = Just min
+                                        , max = Nothing
+                                        , allowNaN = False
+                                        , allowInfinities = False
+                                        }
+                                    )
                                 )
+                                F.bool
+                                |> F.andThen
+                                    (\( max, infinities ) ->
+                                        F.tuple
+                                            (F.constant min)
+                                            (F.floatWith
+                                                { min = Just min
+                                                , max = max
+                                                , allowNaN = False
+                                                , allowInfinities = infinities
+                                                }
+                                            )
+                                    )
                         )
                 )
                 (\( min, f ) -> f >= min)
@@ -422,14 +464,28 @@ fuzzers =
                     |> F.andThen
                         (\max ->
                             F.tuple
-                                (F.constant max)
-                                (F.floatWith
-                                    { min = Nothing
-                                    , max = Just max
-                                    , allowNaN = False
-                                    , allowInfinities = False
-                                    }
+                                (F.maybe
+                                    (F.floatWith
+                                        { min = Nothing
+                                        , max = Just max
+                                        , allowNaN = False
+                                        , allowInfinities = False
+                                        }
+                                    )
                                 )
+                                F.bool
+                                |> F.andThen
+                                    (\( min, infinities ) ->
+                                        F.tuple
+                                            (F.constant max)
+                                            (F.floatWith
+                                                { min = min
+                                                , max = Just max
+                                                , allowNaN = False
+                                                , allowInfinities = infinities
+                                                }
+                                            )
+                                    )
                         )
                 )
                 (\( max, f ) -> f <= max)
@@ -580,6 +636,7 @@ fuzzers =
                 (F.stringWith
                     { minLength = Just 1
                     , maxLength = Just 10
+                    , customAverageLength = Nothing
                     , charFuzzer = F.anyChar
                     }
                 )
@@ -599,6 +656,7 @@ fuzzers =
                 (F.stringWith
                     { minLength = Nothing
                     , maxLength = Just 0
+                    , customAverageLength = Nothing
                     , charFuzzer = F.char
                     }
                 )
@@ -608,6 +666,7 @@ fuzzers =
                 (F.stringWith
                     { minLength = Just 1
                     , maxLength = Just 1
+                    , customAverageLength = Nothing
                     , charFuzzer = F.char
                     }
                 )
@@ -617,6 +676,7 @@ fuzzers =
                 (F.stringWith
                     { minLength = Just 1
                     , maxLength = Just 3
+                    , customAverageLength = Nothing
                     , charFuzzer = F.char
                     }
                 )
@@ -625,6 +685,7 @@ fuzzers =
                 (F.stringWith
                     { minLength = Just 1
                     , maxLength = Just 3
+                    , customAverageLength = Nothing
                     , charFuzzer = F.char
                     }
                 )
@@ -633,6 +694,7 @@ fuzzers =
                 (F.stringWith
                     { minLength = Just 1
                     , maxLength = Just 3
+                    , customAverageLength = Nothing
                     , charFuzzer = F.char
                     }
                 )
@@ -647,6 +709,7 @@ fuzzers =
                                         F.stringWith
                                             { minLength = Just from
                                             , maxLength = Just to
+                                            , customAverageLength = Nothing
                                             , charFuzzer = F.char
                                             }
                                     )
@@ -1191,7 +1254,7 @@ challengeReverse =
     testMinithesis "Reverse"
         (F.list F.anyNumericInt)
         (\list -> list == List.reverse list)
-        (FailsWith [ -2147483648, -2147483647 ])
+        (FailsWith [ -2147483647, -2147483648 ])
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/large_union_list.md>
@@ -1201,4 +1264,4 @@ challengeLargeUnionList =
     testMinithesis "Large Union List"
         (F.list (F.list F.anyNumericInt))
         (\lists -> Set.size (Set.fromList (List.fastConcat lists)) <= 4)
-        (FailsWith [ [ -2147483648, -2147483647, -2147483646, -2147483645, -2147483644 ] ])
+        (FailsWith [ [ -2147483647, -2147483646, -2147483645, -2147483644, -2147483648 ] ])
