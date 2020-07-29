@@ -15,7 +15,6 @@ module Minithesis.Fuzz exposing
     , andThen, constant, reject, filter
     , lazy
     , oneOf, oneOfValues, frequency, frequencyValues
-    {- , exampleRun -}
     )
 
 {-|
@@ -23,7 +22,7 @@ module Minithesis.Fuzz exposing
 
 # The basics
 
-@docs Fuzzer, example, exampleWithSeed, exampleRun
+@docs Fuzzer, example, exampleWithSeed
 
 
 # Values
@@ -145,57 +144,6 @@ exampleWithSeed seedInt (Fuzzer fn) =
                             acc
     in
     go 10 (Random.initialSeed seedInt) []
-
-
-
---exampleRun : Fuzzer a -> Result Stop (a, List Int)
---exampleRun (Fuzzer fn) =
---    let
---        fallbackSeed : Random.Seed -> Random.Seed
---        fallbackSeed seed =
---            seed
---                |> Random.step (Random.constant ())
---                |> Tuple.second
---
---        nextSeed : Random.Seed -> Maybe Random.Seed -> Random.Seed
---        nextSeed previousSeed maybeNextSeed =
---            case maybeNextSeed of
---                Just seed ->
---                    seed
---
---                Nothing ->
---                    fallbackSeed previousSeed
---
---        go : Int -> Random.Seed -> List a -> List a
---        go i seed acc =
---            if i <= 0 then
---                acc
---
---            else
---                case
---                    fn
---                        (TestCase.init
---                            { seed = seed
---
---                            -- TODO perhaps we can make this a Maybe so that this never hangs?
---                            , maxSize = 1000
---                            , prefix = RandomRun.empty
---                            }
---                        )
---                of
---                    Ok ( value, testCase ) ->
---                        go
---                            (i - 1)
---                            (nextSeed seed testCase.seed)
---                            (value :: acc)
---
---                    Err ( _, testCase ) ->
---                        go
---                            i
---                            (nextSeed seed testCase.seed)
---                            acc
---    in
---    go 10 (Random.initialSeed seedInt) []
 
 
 {-| All fuzzers need to somehow go through picking an Int.
