@@ -1,11 +1,7 @@
 module Minithesis.Fuzz.Internal exposing (Fuzzer(..), run)
 
 import Minithesis.Stop exposing (Stop(..))
-import Minithesis.TestCase as TestCase
-    exposing
-        ( Status(..)
-        , TestCase
-        )
+import Minithesis.TestCase exposing (Status(..), TestCase)
 
 
 type Fuzzer a

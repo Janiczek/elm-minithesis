@@ -7,6 +7,7 @@ module Minithesis.Fuzz.Float exposing
 import Bitwise
 import Dict exposing (Dict)
 import OurExtras.Bitwise as Bitwise
+import OurExtras.List as List
 
 
 lexToFloat : ( Int, Int ) -> Float
@@ -231,6 +232,6 @@ nastyFloats =
 
         allPositive : List Float
         allPositive =
-            specificExamples ++ List.concatMap (List.repeat 5) nonfiniteValues
+            specificExamples ++ List.fastConcatMap (List.repeat 5) nonfiniteValues
     in
     allPositive ++ List.map negate allPositive

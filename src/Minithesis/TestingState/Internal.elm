@@ -4,14 +4,10 @@ module Minithesis.TestingState.Internal exposing
     , runTest
     )
 
-import Minithesis.Fuzz.Internal as Fuzz exposing (Fuzzer)
+import Minithesis.Fuzz.Internal exposing (Fuzzer)
 import Minithesis.RandomRun as RandomRun exposing (RandomRun)
 import Minithesis.Stop exposing (Stop(..))
-import Minithesis.TestCase as TestCase
-    exposing
-        ( Status(..)
-        , TestCase
-        )
+import Minithesis.TestCase exposing (Status(..), TestCase)
 import Random
 
 

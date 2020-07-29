@@ -126,7 +126,7 @@ deleteChunkAndMaybeDecrementPrevious meta randomRun state =
                 RandomRun.deleteChunk meta randomRun
         in
         case Internal.runTest (TestCase.forRun runWithDeletedChunk) state of
-            Err err ->
+            Err _ ->
                 Nothing
 
             Ok ( nextState, testCase ) ->
@@ -211,7 +211,7 @@ redistributeChoices meta randomRun state =
             Internal.runTest (TestCase.forRun newRun) state
                 |> Result.toMaybe
                 |> Maybe.andThen
-                    (\( state_, testCase ) ->
+                    (\( state_, _ ) ->
                         if meta.rightIndex < RandomRun.length newRun && newLeft > 0 then
                             binarySearch
                                 (\newValue run ->

@@ -1,14 +1,15 @@
 module MinithesisTest exposing (suite)
 
-import Expect exposing (Expectation)
+import Expect
 import Fuzz
 import Minithesis exposing (TestResult(..))
 import Minithesis.Fuzz as F exposing (Fuzzer)
 import Minithesis.Stop exposing (Stop(..))
+import OurExtras.List as List
 import Random
 import Set
 import Shrink
-import Test exposing (Test, describe, fuzz, only, skip, test, todo)
+import Test exposing (Test, describe, fuzz, test, todo)
 
 
 suite : Test
@@ -170,7 +171,7 @@ fuzzers =
         , describe "reject"
             [ testMinithesis "Makes the test never run"
                 F.reject
-                (\n -> True)
+                (\_ -> True)
                 (Error Unsatisfiable)
             ]
         , describe "map"
@@ -1179,7 +1180,7 @@ challengeBound5 =
     in
     testMinithesis "Bound 5"
         tuple5
-        (\( a, b, ( c, d, e ) ) -> i16Sum (List.concat [ a, b, c, d, e ]) < 5 * 256)
+        (\( a, b, ( c, d, e ) ) -> i16Sum (List.fastConcat [ a, b, c, d, e ]) < 5 * 256)
         (FailsWith ( [ -31488 ], [ -32768 ], ( [], [], [] ) ))
 
 
@@ -1199,5 +1200,5 @@ challengeLargeUnionList : Test
 challengeLargeUnionList =
     testMinithesis "Large Union List"
         (F.list (F.list F.anyNumericInt))
-        (\lists -> Set.size (Set.fromList (List.concat lists)) <= 4)
+        (\lists -> Set.size (Set.fromList (List.fastConcat lists)) <= 4)
         (FailsWith [ [ -2147483648, -2147483647, -2147483646, -2147483645, -2147483644 ] ])

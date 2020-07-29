@@ -931,43 +931,42 @@ frequency options =
             options
                 |> List.filter (\( weight, _ ) -> weight > 0)
     in
-    case List.length cleanOptions of
-        0 ->
-            reject
+    if List.isEmpty cleanOptions then
+        reject
 
-        n ->
-            let
-                ( reverseCumulativeOptions, sum ) =
-                    List.foldl
-                        (\( weight, fuzzer ) ( accCumulativeOptions, accSum ) ->
-                            let
-                                newSum =
-                                    accSum + weight
-                            in
-                            ( ( newSum, fuzzer ) :: accCumulativeOptions
-                            , newSum
-                            )
-                        )
-                        ( [], 0 )
-                        cleanOptions
-
-                cumulativeOptions =
-                    List.reverse reverseCumulativeOptions
-            in
-            probability
-                |> andThen
-                    (\p ->
+    else
+        let
+            ( reverseCumulativeOptions, sum ) =
+                List.foldl
+                    (\( weight, fuzzer ) ( accCumulativeOptions, accSum ) ->
                         let
-                            f =
-                                p * sum
+                            newSum =
+                                accSum + weight
                         in
-                        case List.Extra.find (\( weight, _ ) -> weight >= f) cumulativeOptions of
-                            Nothing ->
-                                reject
-
-                            Just ( _, fuzzer ) ->
-                                fuzzer
+                        ( ( newSum, fuzzer ) :: accCumulativeOptions
+                        , newSum
+                        )
                     )
+                    ( [], 0 )
+                    cleanOptions
+
+            cumulativeOptions =
+                List.reverse reverseCumulativeOptions
+        in
+        probability
+            |> andThen
+                (\p ->
+                    let
+                        f =
+                            p * sum
+                    in
+                    case List.Extra.find (\( weight, _ ) -> weight >= f) cumulativeOptions of
+                        Nothing ->
+                            reject
+
+                        Just ( _, fuzzer ) ->
+                            fuzzer
+                )
 
 
 frequencyValues : List ( Float, a ) -> Fuzzer a
@@ -1110,7 +1109,7 @@ floatWith :
     , allowInfinities : Bool
     }
     -> Fuzzer Float
-floatWith ({ min, max, allowNaN, allowInfinities } as options) =
+floatWith { min, max, allowNaN, allowInfinities } =
     {- TODO if we figure out how to do nextUp and nextDown for IEEE 734 floats,
        we'll be able to do exclodeMin : Bool, excludeMax : Bool
     -}

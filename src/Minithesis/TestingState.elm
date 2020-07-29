@@ -113,7 +113,7 @@ stopIfUnsatisfiable :
     -> Result ( Stop, TestCase ) (TestingState a)
 stopIfUnsatisfiable result =
     case result of
-        Err err ->
+        Err _ ->
             result
 
         Ok state ->

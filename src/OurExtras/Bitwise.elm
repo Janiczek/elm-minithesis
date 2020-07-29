@@ -2,7 +2,6 @@ module OurExtras.Bitwise exposing
     ( combineTo52BitNumber
     , isBitSet
     , keepBits
-    , ones
     , reverse52Bits
     , reverseNBits
     )
