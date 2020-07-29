@@ -8,7 +8,7 @@ import OurExtras.List as List
 import Random
 import Set
 import Shrink
-import Test exposing (Test, describe, fuzz, test, todo)
+import Test exposing (Test, describe, fuzzWith, test, todo)
 
 
 suite : Test
@@ -29,7 +29,7 @@ seedFuzzer =
 
 testMinithesis : String -> Fuzzer a -> (a -> Bool) -> TestResult a -> Test
 testMinithesis name fuzzer userFn expectedResult =
-    fuzz seedFuzzer name <|
+    fuzzWith { runs = 1 } seedFuzzer name <|
         \seed ->
             Minithesis.test "" fuzzer userFn
                 |> Minithesis.run seed
@@ -55,7 +55,7 @@ testMinithesisCanGenerate name fuzzer value =
 
 testMinithesisCanGenerateSatisfying : String -> Fuzzer a -> (a -> Bool) -> Test
 testMinithesisCanGenerateSatisfying name fuzzer predicate =
-    fuzz seedFuzzer name <|
+    fuzzWith { runs = 1 } seedFuzzer name <|
         \seed ->
             Minithesis.test
                 ("Can generate value satisfying: " ++ name)
@@ -69,7 +69,7 @@ testMinithesisCanGenerateSatisfying name fuzzer predicate =
 
 testMinithesisCannotGenerate : String -> Fuzzer a -> a -> Test
 testMinithesisCannotGenerate name fuzzer value =
-    fuzz seedFuzzer name <|
+    fuzzWith { runs = 1 } seedFuzzer name <|
         \seed ->
             Minithesis.test
                 ("Cannot generate: " ++ name)
@@ -82,7 +82,7 @@ testMinithesisCannotGenerate name fuzzer value =
 
 testMinithesisCannotGenerateSatisfying : String -> Fuzzer a -> (a -> Bool) -> Test
 testMinithesisCannotGenerateSatisfying name fuzzer predicate =
-    fuzz seedFuzzer name <|
+    fuzzWith { runs = 1 } seedFuzzer name <|
         \seed ->
             Minithesis.test
                 ("Cannot generate: " ++ name)
