@@ -1089,6 +1089,25 @@ shrinkers =
             )
             (\( m, n ) -> m + n <= 1000)
             (FailsWith ( 1, 1000 ))
+        , testMinithesis "Able to reduce lists written in a 'length first' way"
+            (F.int 0 10
+                |> F.andThen
+                    (\length ->
+                        let
+                            go : Int -> List Int -> Fuzzer (List Int)
+                            go todo acc =
+                                if todo == 0 then
+                                    F.constant (List.reverse acc)
+
+                                else
+                                    F.int 0 10000
+                                        |> F.andThen (\item -> go (todo - 1) (item :: acc))
+                        in
+                        go length []
+                    )
+            )
+            (\list -> List.sum list <= 1000)
+            (FailsWith [ 1001 ])
         , shrinkingChallenges
         ]
 

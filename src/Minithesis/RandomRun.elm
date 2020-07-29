@@ -12,9 +12,11 @@ module Minithesis.RandomRun exposing
     , set
     , sortChunk
     , swapIfOutOfOrder
+    , update
     )
 
 import Array exposing (Array)
+import Array.Extra
 
 
 type alias RandomRun =
@@ -149,3 +151,8 @@ swapIfOutOfOrder { leftIndex, rightIndex } run =
         )
         (get leftIndex run)
         (get rightIndex run)
+
+
+update : Int -> (Int -> Int) -> RandomRun -> RandomRun
+update index fn run =
+    Array.Extra.update index fn run

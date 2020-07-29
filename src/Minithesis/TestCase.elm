@@ -3,6 +3,7 @@ module Minithesis.TestCase exposing
     , TestCase
     , forRun
     , init
+    , isInteresting
     , markStatus
     )
 
@@ -63,3 +64,8 @@ markStatus status testCase =
             ( StopTest
             , { testCase | status = status }
             )
+
+
+isInteresting : TestCase -> Bool
+isInteresting { status } =
+    status == Interesting

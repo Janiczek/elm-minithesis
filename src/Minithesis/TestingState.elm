@@ -256,9 +256,32 @@ runShrinkCommand :
 runShrinkCommand cmd randomRun state =
     case cmd of
         DeleteChunk meta ->
-            runTest
-                (TestCase.forRun (RandomRun.deleteChunk meta randomRun))
-                state
+            let
+                runWithDeletedChunk =
+                    RandomRun.deleteChunk meta randomRun
+            in
+            case runTest (TestCase.forRun runWithDeletedChunk) state of
+                Err err ->
+                    Err err
+
+                Ok ( nextState, testCase ) ->
+                    if
+                        not (TestCase.isInteresting testCase)
+                            && (meta.startIndex > 0)
+                            && (RandomRun.get (meta.startIndex - 1) runWithDeletedChunk /= Just 0)
+                    then
+                        {- Try reducing the number before this removed chunk,
+                           it's frequently the length parameter.
+                        -}
+                        let
+                            runWithDecrementedValue =
+                                runWithDeletedChunk
+                                    |> RandomRun.update (meta.startIndex - 1) (\x -> x - 1)
+                        in
+                        runTest (TestCase.forRun runWithDecrementedValue) nextState
+
+                    else
+                        Ok ( nextState, testCase )
 
         ReplaceChunkWithZero meta ->
             runTest
@@ -341,12 +364,11 @@ loopShrink shrinkFn loopState randomRun state =
                     Err err
 
                 Ok ( nextState, testCase ) ->
-                    let
-                        isInteresting : Bool
-                        isInteresting =
-                            testCase.status == Interesting
-                    in
-                    loopShrink shrinkFn (toLoopState isInteresting) nextRandomRun nextState
+                    loopShrink
+                        shrinkFn
+                        (toLoopState (TestCase.isInteresting testCase))
+                        nextRandomRun
+                        nextState
 
         Stop ->
             Ok ( state, TestCase.forRun randomRun )
@@ -374,12 +396,7 @@ binarySearch updateRun binarySearchState run state =
             Err err
 
         Ok ( nextState, testCase ) ->
-            let
-                isInteresting : Bool
-                isInteresting =
-                    testCase.status == Interesting
-            in
-            if isInteresting then
+            if TestCase.isInteresting testCase then
                 -- this is the best we could have hoped for
                 Ok ( nextState, testCase )
 
