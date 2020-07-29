@@ -113,10 +113,8 @@ defaultOptions =
 
 {-| Run a test with the given PRNG seed.
 
-Note: if trying to use Minithesis inside `elm-explorations/test` suite, don't
-wrap this function in `Test.fuzz` yourself. **Use
-[`Test.Minithesis.mFuzz`](#Test.Minithesis.mFuzz)
-instead:** it sets sensible options (number of runs) on both levels.
+Note: if using Minithesis inside an `elm-explorations/test` suite, you can use
+[`Test.Minithesis.mFuzz`](#Test.Minithesis.mFuzz).
 
 -}
 run : Int -> Test a -> ( String, TestResult a )
@@ -126,10 +124,8 @@ run seed test_ =
 
 {-| Run a test with the given PRNG seed and other options.
 
-Note: if trying to use Minithesis inside `elm-explorations/test` suite, don't
-wrap this function in `Test.fuzz` yourself. **Use
-[`Test.Minithesis.mFuzzWith`](#Test.Minithesis.mFuzzWith) instead:** it sets
-sensible options (number of runs) on both levels.
+Note: if using Minithesis inside an `elm-explorations/test` suite, you can use
+[`Test.Minithesis.mFuzzWith`](#Test.Minithesis.mFuzzWith).
 
 -}
 runWith : Options -> Int -> Test a -> ( String, TestResult a )

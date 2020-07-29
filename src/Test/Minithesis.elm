@@ -1,6 +1,6 @@
 module Test.Minithesis exposing (mFuzz, mFuzzWith)
 
-{-| Interop with `elm-explorations/test`
+{-| Interop with `elm-explorations/test`.
 
 @docs mFuzz, mFuzzWith
 
@@ -24,32 +24,46 @@ seedFuzzer =
         Shrink.noShrink
 
 
-{-| Automatically sets `elm-test` fuzz options to `{ runs = 1 }`, since
-Minithesis already has 100 runs as default.
+{-|
 
-(Keeping defaults of both would effectively make Minithesis try to generate
-examples somewhere between 10k and 100k times per single test.)
+    import Test.Minithesis exposing (mFuzz)
+    import Minithesis
+    import Minithesis.Fuzz as MFuzz
+
+    mFuzz <|
+        Minithesis.test "list equals itself reversed"
+            (MFuzz.list (MFuzz.int 1 10))
+            (\list -> list == List.reverse list)
 
 -}
 mFuzz : Minithesis.Test a -> Test.Test
 mFuzz ((Test test) as wrappedTest) =
-    Test.fuzzWith { runs = 1 } seedFuzzer test.label <|
+    Test.fuzz seedFuzzer test.label <|
         \{ minithesisSeed } ->
             Minithesis.run minithesisSeed wrappedTest
                 |> Tuple.second
                 |> Expect.equal Passes
 
 
-{-| Automatically sets `elm-test` fuzz options to `{ runs = 1 }`, since
-Minithesis already has 100 runs as default.
+{-|
 
-(Keeping defaults of both would effectively make Minithesis try to generate
-examples somewhere between 10k and 100k times per single test.)
+    import Test.Minithesis exposing (mFuzz)
+    import Minithesis
+    import Minithesis.Fuzz as MFuzz
+
+    mFuzzWith
+        { maxExamples = 100
+        , showShrinkHistory = True
+        }
+            <|
+        Minithesis.test "list equals itself reversed"
+            (MFuzz.list (MFuzz.int 1 10))
+            (\list -> list == List.reverse list)
 
 -}
 mFuzzWith : Minithesis.Options -> Minithesis.Test a -> Test.Test
 mFuzzWith options ((Test test) as wrappedTest) =
-    Test.fuzzWith { runs = 1 } seedFuzzer test.label <|
+    Test.fuzz seedFuzzer test.label <|
         \{ minithesisSeed } ->
             Minithesis.runWith options minithesisSeed wrappedTest
                 |> Tuple.second
