@@ -4,7 +4,6 @@ import Expect
 import Fuzz
 import Minithesis exposing (TestResult(..))
 import Minithesis.Fuzz as F exposing (Fuzzer)
-import Minithesis.Stop exposing (Stop(..))
 import OurExtras.List as List
 import Random
 import Set
@@ -43,7 +42,7 @@ testMinithesisRejects name fuzzer =
     testMinithesis ("Rejects: " ++ name)
         fuzzer
         (\_ -> True)
-        (Error Unsatisfiable)
+        Unsatisfiable
 
 
 testMinithesisCanGenerate : String -> Fuzzer a -> a -> Test
@@ -64,7 +63,7 @@ testMinithesisCanGenerateSatisfying name fuzzer predicate =
                 (not << predicate)
                 |> Minithesis.run seed
                 |> Tuple.second
-                |> Minithesis.isFailsWith
+                |> isFailsWith
                 |> Expect.true "Should have given an example of a generated value satisfying the predicate"
 
 
@@ -158,7 +157,7 @@ fuzzers =
             [ testMinithesis "Stops with Unsatisfiable if rejecting too many values"
                 (F.int 0 10 |> F.filter (\_ -> False))
                 (\_ -> True)
-                (Error Unsatisfiable)
+                Unsatisfiable
             , testMinithesis "Generated values satisfy preconditions"
                 (F.int 0 10 |> F.filter (\n -> n /= 0))
                 (\n -> n /= 0)
@@ -172,7 +171,7 @@ fuzzers =
             [ testMinithesis "Makes the test never run"
                 F.reject
                 (\_ -> True)
-                (Error Unsatisfiable)
+                Unsatisfiable
             ]
         , describe "map"
             [ testMinithesis "any number * 2 = even number"
