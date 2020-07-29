@@ -272,7 +272,7 @@ iterateShrinkWhileProgress counterexample state =
 
 
 type ShrinkCommand
-    = DeleteChunk { chunkSize : Int, startIndex : Int }
+    = DeleteChunkAndMaybeDecrementPrevious { chunkSize : Int, startIndex : Int }
     | ReplaceChunkWithZero { chunkSize : Int, startIndex : Int }
     | MinimizeChoiceWithBinarySearch { index : Int }
     | SortChunk { chunkSize : Int, startIndex : Int }
@@ -297,7 +297,7 @@ runShrinkCommand :
     -> Maybe ( TestingState a, TestCase )
 runShrinkCommand cmd randomRun state =
     case cmd of
-        DeleteChunk meta ->
+        DeleteChunkAndMaybeDecrementPrevious meta ->
             let
                 runWithDeletedChunk =
                     RandomRun.deleteChunk meta randomRun
@@ -529,7 +529,7 @@ shrinkCommandsFor counterexample =
 deletionShrinkCommands : Int -> List ShrinkCommand
 deletionShrinkCommands itemsCount =
     blockShrinks
-        DeleteChunk
+        DeleteChunkAndMaybeDecrementPrevious
         { itemsCount = itemsCount
         , allowChunksOfSize1 = True
         }
@@ -586,27 +586,27 @@ redistributeShrinkCommands itemsCount =
 eg. it doesn't retry deleting at the same index after deleting a chunk.
 
     blockShrinks
-        DeleteChunk
+        SortChunk
         { itemsCount = 10, allowChunksOfSize1 = False }
         -->
         [ -- Chunks of size 8
-          DeleteChunk { chunkSize = 8, startIndex = 2 }
-        , DeleteChunk { chunkSize = 8, startIndex = 1 }
-        , DeleteChunk { chunkSize = 8, startIndex = 0 }
+          SortChunk { chunkSize = 8, startIndex = 2 }
+        , SortChunk { chunkSize = 8, startIndex = 1 }
+        , SortChunk { chunkSize = 8, startIndex = 0 }
 
         -- Chunks of size 4
-        , DeleteChunk { chunkSize = 4, startIndex = 6 }
-        , DeleteChunk { chunkSize = 4, startIndex = 5 }
+        , SortChunk { chunkSize = 4, startIndex = 6 }
+        , SortChunk { chunkSize = 4, startIndex = 5 }
         , -- ...
-          DeleteChunk { chunkSize = 4, startIndex = 1 }
-        , DeleteChunk { chunkSize = 4, startIndex = 0 }
+          SortChunk { chunkSize = 4, startIndex = 1 }
+        , SortChunk { chunkSize = 4, startIndex = 0 }
 
         -- Chunks of size 2
-        , DeleteChunk { chunkSize = 2, startIndex = 8 }
-        , DeleteChunk { chunkSize = 2, startIndex = 7 }
+        , SortChunk { chunkSize = 2, startIndex = 8 }
+        , SortChunk { chunkSize = 2, startIndex = 7 }
         , -- ...
-          DeleteChunk { chunkSize = 2, startIndex = 1 }
-        , DeleteChunk { chunkSize = 2, startIndex = 0 }
+          SortChunk { chunkSize = 2, startIndex = 1 }
+        , SortChunk { chunkSize = 2, startIndex = 0 }
         ]
 
 -}

@@ -151,8 +151,8 @@ runState state =
 shrinkCmdLabel : ShrinkCommand -> String
 shrinkCmdLabel cmd =
     case cmd of
-        DeleteChunk { chunkSize, startIndex } ->
-            "DeleteChunk { size = "
+        DeleteChunkAndMaybeDecrementPrevious { chunkSize, startIndex } ->
+            "DeleteChunkAndMaybeDecrementPrevious { size = "
                 ++ String.fromInt chunkSize
                 ++ ", startIndex = "
                 ++ String.fromInt startIndex
