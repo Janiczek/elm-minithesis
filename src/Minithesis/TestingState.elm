@@ -1,7 +1,5 @@
 module Minithesis.TestingState exposing
-    ( ShrinkCommand(..)
-    , Test(..)
-    , TestingState
+    ( Test(..)
     , generate
     , init
     , shrink
@@ -16,6 +14,12 @@ import Minithesis.TestCase as TestCase
         ( Status(..)
         , TestCase
         )
+import Minithesis.TestingState.Internal as Internal
+    exposing
+        ( ShrinkCommand(..)
+        , TestingState
+        )
+import Minithesis.TestingState.Shrink as Shrink
 import OurExtras.List
 import Random
 
@@ -26,24 +30,6 @@ type Test a
         , userTestFn : TestCase -> Result ( Stop, TestCase ) ( Bool, TestCase )
         , fuzzer : Fuzzer a
         }
-
-
-type alias TestingState a =
-    -- config
-    { seed : Random.Seed
-    , maxExamples : Int
-    , showShrinkHistory : Bool
-    , label : String
-    , userTestFn : TestCase -> Result ( Stop, TestCase ) TestCase
-    , fuzzer : Fuzzer a
-
-    -- state
-    , validTestCases : Int
-    , calls : Int
-    , bestCounterexample : Maybe RandomRun
-    , previousBestCounterexample : Maybe RandomRun
-    , shrinkHistory : List ( a, RandomRun, Maybe ShrinkCommand )
-    }
 
 
 {-| We cap the maximum amount of entropy a test case can use. This prevents
@@ -107,7 +93,7 @@ generate result =
                     && (state.calls < state.maxExamples * 10)
             then
                 generate
-                    (runTest
+                    (Internal.runTest
                         (TestCase.init
                             { prefix = RandomRun.empty
                             , seed = state.seed
@@ -120,76 +106,6 @@ generate result =
 
             else
                 Ok state
-
-
-runTest :
-    TestCase
-    -> TestingState a
-    -> Result ( Stop, TestCase ) ( TestingState a, TestCase )
-runTest testCase state =
-    let
-        toNewState : TestCase -> TestingState a
-        toNewState testCase0 =
-            let
-                testCase1 =
-                    markValidIfUndecided testCase0
-            in
-            { state
-                | calls = state.calls + 1
-                , validTestCases =
-                    if List.member testCase1.status [ Valid, Interesting ] then
-                        state.validTestCases + 1
-
-                    else
-                        state.validTestCases
-                , bestCounterexample =
-                    if testCase1.status == Interesting then
-                        case state.bestCounterexample of
-                            Nothing ->
-                                Just testCase1.randomRun
-
-                            Just bestCounterexample ->
-                                if RandomRun.compare testCase1.randomRun bestCounterexample == LT then
-                                    Just testCase1.randomRun
-
-                                else
-                                    state.bestCounterexample
-
-                    else
-                        state.bestCounterexample
-                , seed =
-                    testCase1.seed
-                        |> Maybe.withDefault state.seed
-                , shrinkHistory =
-                    if state.showShrinkHistory then
-                        state.shrinkHistory
-
-                    else
-                        state.shrinkHistory
-            }
-    in
-    if state.bestCounterexample == Just testCase.prefix then
-        Ok ( state, testCase )
-
-    else
-        case state.userTestFn testCase of
-            Ok testCase_ ->
-                Ok ( toNewState testCase_, testCase_ )
-
-            Err ( StopTest, testCase_ ) ->
-                Ok ( toNewState testCase_, testCase_ )
-
-            Err otherErr ->
-                Err otherErr
-
-
-markValidIfUndecided : TestCase -> TestCase
-markValidIfUndecided testCase =
-    if testCase.status == Undecided then
-        { testCase | status = Valid }
-
-    else
-        testCase
 
 
 stopIfUnsatisfiable :
@@ -271,14 +187,6 @@ iterateShrinkWhileProgress counterexample state =
                 iterateShrinkWhileProgress nextCounterexample nextState
 
 
-type ShrinkCommand
-    = DeleteChunkAndMaybeDecrementPrevious { chunkSize : Int, startIndex : Int }
-    | ReplaceChunkWithZero { chunkSize : Int, startIndex : Int }
-    | MinimizeChoiceWithBinarySearch { index : Int }
-    | SortChunk { chunkSize : Int, startIndex : Int }
-    | RedistributeChoices { leftIndex : Int, rightIndex : Int }
-
-
 shrinkOnce :
     RandomRun
     -> TestingState a
@@ -298,179 +206,19 @@ runShrinkCommand :
 runShrinkCommand cmd randomRun state =
     case cmd of
         DeleteChunkAndMaybeDecrementPrevious meta ->
-            let
-                runWithDeletedChunk =
-                    RandomRun.deleteChunk meta randomRun
-            in
-            case runTest (TestCase.forRun runWithDeletedChunk) state of
-                Err err ->
-                    Nothing
-
-                Ok ( nextState, testCase ) ->
-                    if TestCase.isInteresting testCase then
-                        Just ( nextState, testCase )
-
-                    else if
-                        (meta.startIndex > 0)
-                            && (RandomRun.get (meta.startIndex - 1) runWithDeletedChunk /= Just 0)
-                    then
-                        {- Try reducing the number before this removed chunk,
-                           it's frequently the length parameter.
-                        -}
-                        let
-                            runWithDecrementedValue =
-                                runWithDeletedChunk
-                                    |> RandomRun.update (meta.startIndex - 1) (\x -> x - 1)
-                        in
-                        runTest (TestCase.forRun runWithDecrementedValue) nextState
-                            |> Result.toMaybe
-
-                    else
-                        Nothing
+            Shrink.deleteChunkAndMaybeDecrementPrevious meta randomRun state
 
         ReplaceChunkWithZero meta ->
-            runTest (TestCase.forRun (RandomRun.replaceChunkWithZero meta randomRun)) state
-                |> Result.toMaybe
+            Shrink.replaceChunkWithZero meta randomRun state
 
-        MinimizeChoiceWithBinarySearch { index } ->
-            RandomRun.get index randomRun
-                |> Maybe.andThen
-                    (\value ->
-                        binarySearch
-                            (\newValue run -> RandomRun.set index newValue run)
-                            { low = 0
-                            , high = value
-                            }
-                            randomRun
-                            state
-                            |> Result.toMaybe
-                    )
+        MinimizeChoiceWithBinarySearch meta ->
+            Shrink.minimizeChoiceWithBinarySearch meta randomRun state
 
         SortChunk meta ->
-            runTest (TestCase.forRun (RandomRun.sortChunk meta randomRun)) state
-                |> Result.toMaybe
+            Shrink.sortChunk meta randomRun state
 
         RedistributeChoices meta ->
-            {- First we try swapping them if left > right.
-
-               Then we try to (binary-search) minimize the left while keeping the
-               sum constant (so what we subtract from left we add to right).
-            -}
-            case RandomRun.swapIfOutOfOrder meta randomRun of
-                Nothing ->
-                    Nothing
-
-                Just { newRun, newLeft, newRight } ->
-                    runTest (TestCase.forRun newRun) state
-                        |> Result.toMaybe
-                        |> Maybe.andThen
-                            (\( state_, testCase ) ->
-                                if meta.rightIndex < RandomRun.length newRun && newLeft > 0 then
-                                    binarySearch
-                                        (\newValue run ->
-                                            RandomRun.replace
-                                                [ ( meta.leftIndex, newValue )
-                                                , ( meta.rightIndex, newRight + newLeft - newValue )
-                                                ]
-                                                run
-                                        )
-                                        { low = 0
-                                        , high = newLeft
-                                        }
-                                        newRun
-                                        state_
-                                        |> Result.toMaybe
-
-                                else
-                                    Nothing
-                            )
-
-
-type Loop a
-    = TryThisNext RandomRun (Bool -> a)
-    | Stop
-
-
-loopShrink :
-    (loopState -> RandomRun -> Loop loopState)
-    -> loopState
-    -> RandomRun
-    -> TestingState a
-    -> Result ( Stop, TestCase ) ( TestingState a, TestCase )
-loopShrink shrinkFn loopState randomRun state =
-    case shrinkFn loopState randomRun of
-        TryThisNext nextRandomRun toLoopState ->
-            case runTest (TestCase.forRun nextRandomRun) state of
-                Err err ->
-                    Err err
-
-                Ok ( nextState, testCase ) ->
-                    loopShrink
-                        shrinkFn
-                        (toLoopState (TestCase.isInteresting testCase))
-                        nextRandomRun
-                        nextState
-
-        Stop ->
-            Ok ( state, TestCase.forRun randomRun )
-
-
-type alias BinarySearchState =
-    { low : Int
-    , high : Int
-    }
-
-
-binarySearch :
-    (Int -> RandomRun -> RandomRun)
-    -> BinarySearchState
-    -> RandomRun
-    -> TestingState a
-    -> Result ( Stop, TestCase ) ( TestingState a, TestCase )
-binarySearch updateRun binarySearchState run state =
-    let
-        runWithLow =
-            updateRun binarySearchState.low run
-    in
-    case runTest (TestCase.forRun runWithLow) state of
-        Err err ->
-            Err err
-
-        Ok ( nextState, testCase ) ->
-            if TestCase.isInteresting testCase then
-                -- this is the best we could have hoped for
-                Ok ( nextState, testCase )
-
-            else
-                loopShrink
-                    (binarySearchLoop updateRun)
-                    binarySearchState
-                    run
-                    nextState
-
-
-binarySearchLoop : (Int -> RandomRun -> RandomRun) -> BinarySearchState -> RandomRun -> Loop BinarySearchState
-binarySearchLoop updateRun ({ low, high } as state) randomRun =
-    if low + 1 < high then
-        let
-            mid =
-                low + (high - low) // 2
-
-            newRandomRun =
-                updateRun mid randomRun
-        in
-        TryThisNext
-            newRandomRun
-            (\wasInteresting ->
-                if wasInteresting then
-                    { state | high = mid }
-
-                else
-                    { state | low = mid }
-            )
-
-    else
-        Stop
+            Shrink.redistributeChoices meta randomRun state
 
 
 runShrinkCommands :

@@ -16,6 +16,7 @@ import Minithesis.RandomRun as RandomRun
 import Minithesis.Stop exposing (Stop(..))
 import Minithesis.TestCase as TestCase exposing (Status(..))
 import Minithesis.TestingState as TestingState
+import Minithesis.TestingState.Internal as TestingState
     exposing
         ( ShrinkCommand(..)
         , TestingState
