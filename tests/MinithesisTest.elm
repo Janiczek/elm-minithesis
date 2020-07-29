@@ -1177,21 +1177,10 @@ challengeBound5 =
                     boundedList
                 )
     in
-    skip <|
-        testMinithesis "Bound 5"
-            tuple5
-            (\( a, b, ( c, d, e ) ) ->
-                let
-                    _ =
-                        if List.isEmpty <| List.concat [ a, b, c, d, e ] then
-                            []
-
-                        else
-                            Debug.log "input" [ a, b, c, d, e ]
-                in
-                i16Sum (List.concat [ a, b, c, d, e ]) < 5 * 256
-            )
-            (FailsWith ( [ -32768 ], [ -1 ], ( [], [], [] ) ))
+    testMinithesis "Bound 5"
+        tuple5
+        (\( a, b, ( c, d, e ) ) -> i16Sum (List.concat [ a, b, c, d, e ]) < 5 * 256)
+        (FailsWith ( [ -31488 ], [ -32768 ], ( [], [], [] ) ))
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md>
