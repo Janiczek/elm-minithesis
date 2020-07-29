@@ -10,14 +10,14 @@ the minimal implementation of the core idea of
 import Minithesis.Fuzz as Fuzz exposing (Fuzzer)
 import Minithesis exposing (Test, TestResult)
 
-listOfIntegers : Fuzzer (List Int)
-listOfIntegers =
+ints : Fuzzer (List Int)
+ints =
     Fuzz.list (Fuzz.int 0 10000)
 
 
 findsSmallList : Test (List Int)
 findsSmallList =
-    Minithesis.test "list always sums under 1000 lol" listOfIntegers <|
+    Minithesis.test "list always sums under 1000 lol" ints <|
         \fuzzedList ->
             List.sum fuzzedList <= 1000
 
@@ -27,6 +27,14 @@ findsSmallList =
 minithesisTestResult : Int -> TestResult (List Int)
 minithesisTestResult seed =
     Minithesis.run seed findsSmallList
+
+
+{-| Running these tests inside elm-test can be done via functions inside
+the Test.Minithesis module
+-}
+test : Test.Test
+test =
+    Test.Minithesis.mFuzz findsSmallList
 ```
 
 ## Tips and tricks
