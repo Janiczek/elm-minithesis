@@ -87,15 +87,50 @@ import Set exposing (Set)
 -- 1) UNDERLYING ABSTRACTION
 
 
+{-| Fuzzer is a recipe for generating a value.
+
+Minithesis fuzzers are special in that they internally remember the random
+numbers drawn from the PRNG; this allows us to later shrink those random numbers
+and try generating a new value from them.
+
+-}
 type alias Fuzzer a =
     Internal.Fuzzer a
 
 
+{-| Shows 10 examples of randomly generated values from the given fuzzer, with
+0 as the PRNG seed.
+
+     Fuzz.example (Fuzz.uniqueList (Fuzz.int 1 3))
+     -->
+     [[1],[3],[],[3],[],[],[3],[3,2],[3],[1,3,2]]
+
+-}
 example : Fuzzer a -> List a
 example fuzzer =
     exampleWithSeed 0 fuzzer
 
 
+{-| Shows 10 examples of randomly generated values from the given fuzzer, with
+the given PRNG seed.
+
+Useful for quick sanity checks in the REPL:
+
+     Fuzz.uniqueList (Fuzz.int 1 3) |> Fuzz.exampleWithSeed 0
+     -->
+     [[1],[3],[],[3],[],[],[3],[3,2],[3],[1,3,2]]
+
+
+     Fuzz.uniqueList (Fuzz.int 1 3) |> Fuzz.exampleWithSeed 1
+     -->
+     [[1,3],[3,2],[],[],[],[1],[],[3],[3,1],[2]]
+
+
+     Fuzz.uniqueList (Fuzz.int 1 3) |> Fuzz.exampleWithSeed 2
+     -->
+     [[],[1],[2,1],[],[2],[1],[1,2],[3,1],[3,1],[]]
+
+-}
 exampleWithSeed : Int -> Fuzzer a -> List a
 exampleWithSeed seedInt (Fuzzer fn) =
     let
@@ -1154,9 +1189,9 @@ filter fn fuzzer =
               )
             ]
 
-Note the fuzzer has to be defined as a top-level declaration and not inside a
-`let..in` expression, else Elm compiler will still complain about a value
-depending on itself.
+(Note: if the Elm compiler is complaining about a value depending on itself, or
+a dependency cycle, try moving your recursive fuzzer from let..in to top level,
+or make it a function instead of a value.)
 
 -}
 lazy : (() -> Fuzzer a) -> Fuzzer a

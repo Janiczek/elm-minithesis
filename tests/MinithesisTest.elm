@@ -1265,3 +1265,13 @@ challengeLargeUnionList =
         (F.list (F.list F.anyNumericInt))
         (\lists -> Set.size (Set.fromList (List.fastConcat lists)) <= 4)
         (FailsWith [ [ -2147483647, -2147483646, -2147483645, -2147483644, -2147483648 ] ])
+
+
+isFailsWith : TestResult a -> Bool
+isFailsWith result =
+    case result of
+        FailsWith _ ->
+            True
+
+        _ ->
+            False
