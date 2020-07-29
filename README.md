@@ -1,5 +1,10 @@
 # `elm-minithesis`
 
+This is an Elm port of [Minithesis](https://github.com/drmaciver/minithesis),
+the minimal implementation of the core idea of
+[Hypothesis](https://github.com/HypothesisWorks/hypothesis). See more under the
+[About](#About) heading.
+
 ```elm
 import Minithesis.Fuzz as Fuzz exposing (Fuzzer)
 import Minithesis exposing (Test, TestResult)
@@ -25,15 +30,66 @@ minithesisTestResult seed =
 
 ## Tips and tricks
 
-* Try `Minithesis.example` and `Minithesis.exampleWithSeed` in the REPL for
-  quick sanity checks of your fuzzers! 
+### Examples
+
+Try `Fuzz.example` and `Fuzz.exampleWithSeed` in the REPL for quick
+sanity checks of your fuzzers! 
 
 ```elm
-> myFuzzer |> Fuzz.exampleWithSeed 0
+import Minithesis.Fuzz as F
 
-TODO finish writing
+F.string |> F.exampleWithSeed 0
+-- gives a list of examples:
+--> ["x","I","","6a=U",";W?","uDc",":ei_^~","=Y","-NAT\\QJ","{92H2DI}-(KOc"]
+
+F.string |> F.exampleWithSeed 1
+-- gives another list of examples:
+--> ["KI","<j XT","","'xpvdQ1ONkM/","tdVd_v","I3=:e0i3","","P)y8$e@^y}1s",",]uz\\","8"]
 ```
 
+## Inspect shrink history
+
+Use the `showShrinkHistory` field of `Minithesis.runWith` to get additional
+information about how shrinking of your data went. This gives a bit of
+visibility into what happens in the black box that Minithesis shrinking is. 
+
+
+```elm
+import Minithesis as M
+import Minithesis.Fuzz as F
+
+M.runWith 
+  { maxExamples = 100
+  , showShrinkHistory = True 
+  } 
+  1
+  (M.test "strings never contain 'x'"
+    F.string
+    (\string -> not (String.contains "x" string))
+  )
+  
+( "strings never contain 'x'"
+, FailsWithShrinks 
+    { finalRun = [1,88,0]
+    , finalValue = "x"
+    , history = 
+        [ { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,1,46,1,75,1,45,1,15,0], shrinkerUsed = "Initial",                                   value = "'xpvdQ1ONkM/" }
+        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,0],                     shrinkerUsed = "DeleteChunk { size = 8, startIndex = 17 }", value = "'xpvdQ1O"     }
+        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,0],                          shrinkerUsed = "DeleteChunk { size = 8, startIndex = 15 }", value = "'xpvdQ1"      }
+        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,0],                               shrinkerUsed = "DeleteChunk { size = 8, startIndex = 13 }", value = "'xpvdQ"       }
+        , { run = [1,7,1,88,1,80,1,86,1,68,0],                                    shrinkerUsed = "DeleteChunk { size = 8, startIndex = 11 }", value = "'xpvd"        }
+        , { run = [1,7,1,88,1,80,1,86,0],                                         shrinkerUsed = "DeleteChunk { size = 8, startIndex = 9 }",  value = "'xpv"         }
+        , { run = [1,7,1,88,1,80,0],                                              shrinkerUsed = "DeleteChunk { size = 8, startIndex = 7 }",  value = "'xp"          }
+        , { run = [1,7,1,88,0],                                                   shrinkerUsed = "DeleteChunk { size = 8, startIndex = 5 }",  value = "'x"           }
+        , { run = [1,88,0],                                                       shrinkerUsed = "DeleteChunk { size = 2, startIndex = 1 }",  value = "x"            }
+        ]
+    }
+)
+```
+
+Paired with some knowledge about which shrinking strategies there are and what
+they do, you can sometimes tweak your fuzzers to optimize how they interact with
+the shrinking process, allowing them to be shrunk better.
 
 ## About
 
