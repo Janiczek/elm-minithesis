@@ -1,22 +1,26 @@
 module Minithesis exposing
     ( RandomRun
     , Test, test
-    , Options, run, runWith, defaultOptions, TestResult(..)
+    , Options, defaultOptions
+    , run, runWith, TestResult(..)
     )
 
 {-| `elm-minithesis` is a property-based testing library based on [Minithesis](https://github.com/drmaciver/minithesis), which is the minimal implementation of the core idea of [Hypothesis](https://github.com/HypothesisWorks/hypothesis).
 
 What sets it apart from `elm-test` fuzzers is a different approach to shrinking.
 Instead of shrinking the generated values, **Minithesis instead shrinks the PRNG
-"rolled" values used to generate the values.** This makes the shrinking process
-generic (you don't have to write a shrinker for your custom fuzzers) and
-sidesteps issue that type-based shrinking has with monadic bind (`andThen`).
+["rolled" values](#RandomRun) used to generate the values.** This makes the
+shrinking process generic (you don't have to write a shrinker for your custom
+fuzzers) and sidesteps issue that type-based shrinking has with monadic bind
+([`andThen`](#Minithesis.Fuzz.andThen)).
 
 @docs RandomRun
 
 @docs Test, test
 
-@docs Options, run, runWith, defaultOptions, TestResult
+@docs Options, defaultOptions
+
+@docs run, runWith, TestResult
 
 -}
 
@@ -34,20 +38,23 @@ import Minithesis.TestingState.Internal as TestingState
 import Random
 
 
-{-| Test holds all the info needed for Minithesis to start generating and
+{-| `Test` holds all the info needed for Minithesis to start generating and
 testing random values.
+
+Can be created using the [`test`](#test) function.
+
 -}
 type alias Test a =
     TestingState.Test a
 
 
-{-| RandomRun can be thought of as a `List Int` - the values PRNG gave us in the
+{-| `RandomRun` can be thought of as a `List Int` - the values PRNG gave us in the
 process of generating a value using a fuzzer.
 
-Shrinkers work on such a RandomRun afterwards.
+Shrinkers work on such a `RandomRun` afterwards.
 
-(You can see what RandomRun did your generated values create using the
-`showShrinkHistory` field of the `runWith` function.)
+(You can see what `RandomRun`s correspond to your generated values using the
+`showShrinkHistory` field of the [`Options`](#Options).)
 
 -}
 type alias RandomRun =
@@ -55,7 +62,8 @@ type alias RandomRun =
     List Int
 
 
-{-| A result of running the test with `run` or `runWith`.
+{-| A result of running the [`Test`](#Test) with [`run`](#run) or
+[`runWith`](#runWith).
 -}
 type TestResult a
     = Passes
@@ -77,7 +85,8 @@ type TestResult a
 {-| Options for running tests.
 
   - `maxExamples`: how many values to generate before concluding the test?
-  - `showShrinkHistory`: return `FailsWithShrinks` instead of `FailsWith`
+  - `showShrinkHistory`: return [`FailsWithShrinks`](#TestResult) instead of
+    [`FailsWith`](#TestResult)
 
 -}
 type alias Options =
@@ -105,8 +114,9 @@ defaultOptions =
 {-| Run a test with the given PRNG seed.
 
 Note: if trying to use Minithesis inside `elm-explorations/test` suite, don't
-wrap this function in `Test.fuzz` yourself. **Use `Test.Minithesis.mFuzz`
-instead;** it sets sensible options (number of runs) on both levels.
+wrap this function in `Test.fuzz` yourself. **Use
+[`Test.Minithesis.mFuzz`](#Test.Minithesis.mFuzz)
+instead:** it sets sensible options (number of runs) on both levels.
 
 -}
 run : Int -> Test a -> ( String, TestResult a )
@@ -117,8 +127,9 @@ run seed test_ =
 {-| Run a test with the given PRNG seed and other options.
 
 Note: if trying to use Minithesis inside `elm-explorations/test` suite, don't
-wrap this function in `Test.fuzz` yourself. **Use `Test.Minithesis.mFuzz`
-instead;** it sets sensible options (number of runs) on both levels.
+wrap this function in `Test.fuzz` yourself. **Use
+[`Test.Minithesis.mFuzzWith`](#Test.Minithesis.mFuzzWith) instead:** it sets
+sensible options (number of runs) on both levels.
 
 -}
 runWith : Options -> Int -> Test a -> ( String, TestResult a )
@@ -135,7 +146,8 @@ runWith { maxExamples, showShrinkHistory } seed test_ =
 
 
 {-| This is how you can create a test for Minithesis.
-Later use `run` or `runWith` to actually start generating and testing values.
+Later use [`run`](#run) or [`runWith`](#runWith) to actually start generating
+and testing values.
 
     listsCanBeReversed : Test
     listsCanBeReversed =

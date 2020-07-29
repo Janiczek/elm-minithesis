@@ -1,10 +1,8 @@
 # `elm-minithesis`
 
-This is an Elm port of [Minithesis](https://github.com/drmaciver/minithesis),
-the minimal implementation of the core idea of
-[Hypothesis](https://github.com/HypothesisWorks/hypothesis).
+`elm-minithesis` is a property-based testing library based on [Minithesis](https://github.com/drmaciver/minithesis), which is the minimal implementation of the core idea of [Hypothesis](https://github.com/HypothesisWorks/hypothesis).
 
-> See more in the [About](#About) section.
+> Read more in the [About](#About) section.
 
 ```elm
 import Minithesis.Fuzz as Fuzz exposing (Fuzzer)
@@ -22,10 +20,13 @@ findsSmallList =
             List.sum fuzzedList <= 1000
 
 
-{-| Will fail and shrink to the minimal example: `( "list always sums under 1000 lol", FailsWith [ 1001 ] )`
+{-| Will fail and shrink to the minimal example:
+
+`( "list always sums under 1000 lol", FailsWith [ 1001 ] )`
+
 -}
-minithesisTestResult : Int -> TestResult (List Int)
-minithesisTestResult seed =
+result : Int -> TestResult (List Int)
+result seed =
     Minithesis.run seed findsSmallList
 
 
@@ -37,9 +38,9 @@ test =
     Test.Minithesis.mFuzz findsSmallList
 ```
 
-## Tips and tricks
+# Tips and tricks
 
-### Examples
+## Examples
 
 Try `Fuzz.example` and `Fuzz.exampleWithSeed` in the REPL for quick
 sanity checks of your fuzzers! 
@@ -83,10 +84,10 @@ M.runWith
     { finalRun = [1,1001,0]
     , finalValue = [1001]
     , history = 
-        [ { run = [1,166,1,5536,1,4725,1,8499,1,7844,1,1727,0], shrinkerUsed = "Initial",                                                           value = [166,5536,4725,8499,7844,1727] }
-        , { run = [1,166,1,5536,0],                             shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 8, startIndex = 5 }", value = [166,5536]                     }
-        , { run = [1,5536,0],                                   shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 2, startIndex = 1 }", value = [5536]                         }
-        , { run = [1,1001,0],                                   shrinkerUsed = "MinimizeChoiceWithBinarySearch { index = 1 }",                      value = [1001]                         }
+        [ value = [166,5536,4725,8499,7844,1727], { run = [1,166,1,5536,1,4725,1,8499,1,7844,1,1727,0], shrinkerUsed = "Initial"                                                           }
+        , value = [166,5536],                     { run = [1,166,1,5536,0],                             shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 8, startIndex = 5 }" }
+        , value = [5536],                         { run = [1,5536,0],                                   shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 2, startIndex = 1 }" }
+        , value = [1001],                         { run = [1,1001,0],                                   shrinkerUsed = "MinimizeChoiceWithBinarySearch { index = 1 }"                      }
         ] 
     }
 )
@@ -96,24 +97,27 @@ Paired with some knowledge about which shrinking strategies there are and what
 they do, you can sometimes tweak your fuzzers to optimize how they interact with
 the shrinking process, allowing them to be shrunk better.
 
-## About
+# About
 
-This is an Elm port of [Minithesis](https://github.com/drmaciver/minithesis),
-the minimal implementation of the core idea of
-[Hypothesis](https://github.com/HypothesisWorks/hypothesis).
+`elm-minithesis` is a property-based testing library based on [Minithesis](https://github.com/drmaciver/minithesis), which is the minimal implementation of the core idea of [Hypothesis](https://github.com/HypothesisWorks/hypothesis).
 
 Hypothesis itself is a Python testing library for property-based testing. What
 sets it apart is its underlying implementation: instead of working on the
-generated values themselves (defining shrinkers on these values), it remembers
-the underlying random "dice rolls" that were used to generate the values,
-and it shrinks *those*. 
+generated values themselves (defining shrinkers on these values, eg. saying that
+a Bool will shrink from `True` to `[False]` and from `False` to `[]`), it
+remembers the underlying random "dice rolls" that were used to generate the
+values, and it shrinks *those*. 
 
 ```elm
--- QuickCheck and most other property-based testing libraries, including elm-test
-shrink : a -> LazyList a -- has to be defined for each fuzzed type, doesn't shrink by default
+-- "type-based shrinking"
+-- (QuickCheck and most other property-based testing libraries, including elm-test)
+shrink : a -> LazyList a -- has to be defined for each fuzzed type,
+                         -- doesn't shrink by default
 
--- Hypothesis
-shrink : List Int -> List (List Int) -- shrinks all fuzzers automatically, can't be configured
+-- "integrated shrinking"
+-- (Hypothesis, jqwik, elm-minithesis :) )
+shrink : List Int -> LazyList (List Int) -- shrinks all fuzzers automatically,
+                                         -- can't be configured
 ```
 
 A very cool consequence of the above is is that it mostly sidesteps the issue
@@ -126,7 +130,7 @@ its values satisfy the invariants out of the box even if using `andThen`!
 
 (Source: ["Integrated vs type based shrinking"](https://hypothesis.works/articles/integrated-shrinking/))
 
-## Community
+# Community
 
 There is a small piece of internet dedicated to `elm-minithesis`: [the
 `#elm-minithesis` channel on Incremental Elm

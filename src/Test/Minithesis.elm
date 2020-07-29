@@ -24,8 +24,8 @@ seedFuzzer =
         Shrink.noShrink
 
 
-{-| Automatically sets elm-test fuzz options to `{ runs = 1 }`, since Minithesis
-already has 100 runs as default.
+{-| Automatically sets `elm-test` fuzz options to `{ runs = 1 }`, since
+Minithesis already has 100 runs as default.
 
 (Keeping defaults of both would effectively make Minithesis try to generate
 examples somewhere between 10k and 100k times per single test.)
@@ -40,8 +40,8 @@ mFuzz ((Test test) as wrappedTest) =
                 |> Expect.equal Passes
 
 
-{-| Automatically sets elm-test fuzz options to `{ runs = 1 }`, since Minithesis
-already has 100 runs as default.
+{-| Automatically sets `elm-test` fuzz options to `{ runs = 1 }`, since
+Minithesis already has 100 runs as default.
 
 (Keeping defaults of both would effectively make Minithesis try to generate
 examples somewhere between 10k and 100k times per single test.)

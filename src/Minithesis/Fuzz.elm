@@ -81,17 +81,18 @@ import Set exposing (Set)
 
 
 
--- TODO more whitespace in string/char fuzzer?
--- TODO ints shrinking toward zero?
--- TODO negative floats shrinking to positive floats?
+{- TODO more whitespace in string/char fuzzer?
+   TODO ints shrinking toward zero?
+   TODO negative floats shrinking to positive floats?
+-}
 -- 1) UNDERLYING ABSTRACTION
 
 
-{-| Fuzzer is a recipe for generating a value.
+{-| `Fuzzer` is a recipe for generating a value.
 
-Minithesis fuzzers are special in that they internally remember the random
-numbers drawn from the PRNG; this allows us to later shrink those random numbers
-and try generating a new value from them.
+Minithesis fuzzers differ from `elm-test` ones in that they internally remember
+the random numbers drawn from the PRNG; this allows us to later shrink those
+random numbers and try generating a new value from them.
 
 -}
 type alias Fuzzer a =
@@ -189,12 +190,12 @@ exampleWithSeed seedInt (Fuzzer fn) =
     go 100 10 (Random.initialSeed seedInt) []
 
 
-{-| All fuzzers need to somehow go through picking an Int.
-(Sequences of Ints are what the shrinkers work on, they're the underlying
-abstraction (see the RandomRun module).
+{-| All fuzzers need to somehow go through picking an `Int`.
+([Sequences of Ints](#Minithesis.RandomRun) are what the shrinkers work on,
+they're the underlying abstraction.)
 
-This function makes a choice in [0, n], by using the generator if randomness is
-needed (or the prefix if some choices are predetermined).
+This function makes a choice in `[0, n]`, by using the generator if randomness
+is needed (or the prefix if some choices are predetermined).
 
 -}
 makeChoice :
@@ -270,7 +271,7 @@ makeChoice n generator testCase =
 -- 2) BUILDING BLOCKS
 
 
-{-| Returns a number in the range [0, n] (inclusive).
+{-| Returns a number in the range `[0, n]` (inclusive).
 -}
 nonnegativeInt_ : Int -> Fuzzer Int
 nonnegativeInt_ n =
@@ -282,9 +283,9 @@ nonnegativeIntGenerator n =
     Random.int 0 n
 
 
-{-| Returns a Bool, with True having chance `p` [0..1].
+{-| Returns a `Bool`, with `True` having chance `p` (`[0..1]`).
 
-Input probabilities outside the [0..1] range will be clamped to [0..1].
+Input probabilities outside the `[0..1]` range will be clamped to `[0..1]`.
 
      Fuzz.example (Fuzz.weightedBool 0.75)
      -->
@@ -324,6 +325,7 @@ weightedBoolGenerator p =
 
 forcedChoice : Int -> Fuzzer Int
 forcedChoice n =
+    -- TODO should we expose this?
     Fuzzer
         (\testCase ->
             if n < 0 then
@@ -358,7 +360,8 @@ toBool int_ =
 -- 3) COMPOSITE FUZZERS
 
 
-{-| Returns a Bool, with True and False both picked with the same probability.
+{-| Returns a `Bool`, with `True` and `False` both picked with the same
+probability.
 
      Fuzz.example Fuzz.bool
      -->
@@ -370,7 +373,7 @@ bool =
     oneOfValues [ True, False ]
 
 
-{-| Returns an integer in the range [from, to] (inclusive).
+{-| Returns an `Int` in the range `[from, to]` (inclusive).
 
 The range of supported values is
 `[Random.minInt = -2147483648, Random.maxInt = 2147483647]`.
@@ -393,7 +396,7 @@ int from to =
             |> map (\n -> n + from)
 
 
-{-| Ranges over all possible integers: [-2147483648, 2147483647]
+{-| Ranges over all `Int`s: `[-2147483648, 2147483647]`
 
      Fuzz.example Fuzz.anyNumericInt
      -->
@@ -405,7 +408,7 @@ anyNumericInt =
     int Random.minInt Random.maxInt
 
 
-{-| Ranges over all positive integers: [1, 2147483647]
+{-| Ranges over all positive `Int`s: `[1, 2147483647]`
 
      Fuzz.example Fuzz.positiveInt
      -->
@@ -417,7 +420,7 @@ positiveInt =
     int 1 Random.maxInt
 
 
-{-| Ranges over all negative integers: [-2147483648, -1]
+{-| Ranges over all negative `Int`s: `[-2147483648, -1]`
 
      Fuzz.example Fuzz.negativeInt
      -->
@@ -429,7 +432,8 @@ negativeInt =
     int Random.minInt -1
 
 
-{-| Ranges over all non-positive integers, notably includes zero: [-2147483648, 0]
+{-| Ranges over all non-positive `Int`s, notably includes zero:
+`[-2147483648, 0]`
 
      Fuzz.example Fuzz.nonpositiveInt
      -->
@@ -441,7 +445,8 @@ nonpositiveInt =
     int Random.minInt 0
 
 
-{-| Ranges over all non-negative integers, notably includes zero: [0, 2147483647]
+{-| Ranges over all non-negative `Int`s, notably includes zero:
+`[0, 2147483647]`
 
      Fuzz.example Fuzz.nonnegativeInt
      -->
@@ -458,8 +463,8 @@ intInfinity =
     round (1 / 0)
 
 
-{-| Ranges over all possible integers: [-2147483648, 2147483647]
-and also the Int variants of +Infinity, -Infinity and NaN.
+{-| Ranges over all `Int`s: `[-2147483648, 2147483647]`
+and also the `Int` variants of `Infinity`, `-Infinity` and `NaN`.
 
      Fuzz.example Fuzz.anyInt
      -->
@@ -899,8 +904,9 @@ tuple3 a b c =
      -->
      [42,42,42,42,42,42,42,42,42,42]
 
-If you think of the Fuzzer type as `Random.Seed -> Maybe a`, the `constant`
-function is how you create `Just` values. (See also `reject`.)
+If you think of the [`Fuzzer`](#Fuzzer) type as `Random.Seed -> Maybe a`, the
+`constant` function is how you create `Just` values. (See also
+[`reject`](#reject).)
 
 So you can use `constant` in similar patterns as you'd do with
 `Json.Decode.succeed` etc.
@@ -917,8 +923,9 @@ constant a =
      -->
      [] -- fails generating a value
 
-If you think of the Fuzzer type as `Random.Seed -> Maybe a`, the `reject`
-function is how you create `Nothing` values. (See also `constant`.)
+If you think of the [`Fuzzer`](#Fuzzer) type as `Random.Seed -> Maybe a`, the
+`reject` function is how you create `Nothing` values. (See also
+[`constant`](#constant).)
 
 So you can use `reject` in similar patterns as you'd do with `Json.Decode.fail`
 etc.
@@ -1082,7 +1089,7 @@ map8 fn a b c d e f g h =
 {-| Generate a value and apply a wrapped function to it.
 
 Handy for working with functions that have many arguments (typically record
-constructors). See the example in `map8`.
+constructors). See the example in [`map8`](#map8).
 
 -}
 andMap : Fuzzer a -> Fuzzer (a -> b) -> Fuzzer b
@@ -1112,10 +1119,10 @@ One possible way to do that is first choosing how many elements will there be
                 go length []
             )
 
-(By the way, it will probably be better to just use one of the `list` helpers in
+(By the way, it will probably be better to just use one of the [`list`](#list) helpers in
 this module.)
 
-Think of it as generalization of `map`. Inside `map` you don't have the option
+Think of it as generalization of [`map`](#map). Inside [`map`](#map) you don't have the option
 to fuzz another value based on what you already have; inside `andThen` you do.
 
 -}
@@ -1144,7 +1151,8 @@ andThen fn (Fuzzer fuzzer) =
      -->
      [4,4,10,0,0,4,4,6,0,6]
 
-Note that it's often better to get to your wanted values using `map`:
+Note that it's often better to get to your wanted values using [`map`](#map), as
+you don't run the risk of rejecting too many values and slowing down your tests:
 
      Fuzz.example
         (Fuzz.int 0 5
@@ -1171,7 +1179,7 @@ filter fn fuzzer =
 
 
 {-| A trick for writing recursive fuzzers. Wrap the fuzzer into a
-`Fuzzer.lazy (\_ -> ...)` lambda like this:
+`Fuzz.lazy (\_ -> ...)` lambda like this:
 
     exprFuzzer : Fuzzer Expr
     exprFuzzer =
@@ -1179,18 +1187,18 @@ filter fn fuzzer =
             [ ( 5, Fuzz.map Int Fuzz.anyNumericInt )
             , ( 1
               , Fuzz.map2 Plus
-                    (F.lazy (\_ -> exprFuzzer))
-                    (F.lazy (\_ -> exprFuzzer))
+                    (Fuzz.lazy (\_ -> exprFuzzer))
+                    (Fuzz.lazy (\_ -> exprFuzzer))
               )
             , ( 1
               , Fuzz.map2 Div
-                    (F.lazy (\_ -> exprFuzzer))
-                    (F.lazy (\_ -> exprFuzzer))
+                    (Fuzz.lazy (\_ -> exprFuzzer))
+                    (Fuzz.lazy (\_ -> exprFuzzer))
               )
             ]
 
 (Note: if the Elm compiler is complaining about a value depending on itself, or
-a dependency cycle, try moving your recursive fuzzer from let..in to top level,
+a dependency cycle, try moving your recursive fuzzer from `let..in` to top level,
 or make it a function instead of a value.)
 
 -}
@@ -1218,7 +1226,7 @@ unit =
     constant ()
 
 
-{-| A fuzzer for Char values. Generates random ASCII chars disregarding the
+{-| A fuzzer for `Char` values. Generates random ASCII chars disregarding the
 control characters and the extended character set.
 
 The range used for the char codes is 32 to 126.
@@ -1234,7 +1242,7 @@ char =
     charRange 32 126
 
 
-{-| A fuzzer for Char values. Generates random Unicode characters (even
+{-| A fuzzer for `Char` values. Generates random Unicode characters (even
 surrogate pairs, but never surrogates themselves). Mostly garbage.
 
 The range used for the char codes is 0 to 1114111 (0x10FFFF).
@@ -1255,7 +1263,7 @@ maxChar =
     0x0010FFFF
 
 
-{-| Use your own char code range for Char generation!
+{-| Use your own char code range for `Char` generation!
 
      Fuzz.example (Fuzz.charRange 48 57)
      -->
@@ -1409,7 +1417,7 @@ oneOfValues items =
     oneOf (List.map constant items)
 
 
-{-| A more general version of `oneOf`.
+{-| A more general version of [`oneOf`](#oneOf).
 
 Picks a fuzzer from the list and runs it. The chance to be picked is given for
 each fuzzer as a weight.
@@ -1484,7 +1492,7 @@ frequency options =
                 )
 
 
-{-| A more general version of `oneOfValues`.
+{-| A more general version of [`oneOfValues`](#oneOfValues).
 
 Picks a value from the list. The chance to be picked is given for each value as
 a weight.
@@ -1518,7 +1526,7 @@ frequencyValues options =
     frequency (List.map (Tuple.mapSecond constant) options)
 
 
-{-| Randomly returns Nothing or wraps the fuzzed value in Just.
+{-| Randomly returns `Nothing` or wraps the fuzzed value in `Just`.
 
      Fuzz.example (Fuzz.maybe Fuzz.char)
      -->
@@ -1534,8 +1542,8 @@ maybe item =
         ]
 
 
-{-| Randomly chooses between returning an error value (Err) or a success value
-(Ok).
+{-| Randomly chooses between returning an error value (`Err`) or a success value
+(`Ok`).
 
      Fuzz.example (Fuzz.result Fuzz.bool Fuzz.char)
      -->
@@ -1550,7 +1558,7 @@ result errFuzzer okFuzzer =
         ]
 
 
-{-| Returns Float in range 0..1 inclusive.
+{-| Returns `Float` in range `[0,1]` inclusive.
 
      Fuzz.example Fuzz.probability
      -->
@@ -1563,7 +1571,7 @@ probability =
         |> map Float.fractionalFloat
 
 
-{-| Returns a float in the range [from, to] (inclusive).
+{-| Returns a `Float` in the range `[from, to]` (inclusive).
 
 The range of supported values is
 `[-1.7976931348623157e308, 1.7976931348623157e308]`.
@@ -1586,8 +1594,9 @@ float from to =
         }
 
 
-{-| Ranges over all possible floats: [-1.7976931348623157e308, 1.7976931348623157e308]
-except for +Infinity, -Infinity and NaN.
+{-| Ranges over all possible `Float`s:
+`[-1.7976931348623157e308, 1.7976931348623157e308]`
+except for `Infinity`, `-Infinity` and `NaN`.
 
 Prefers nice non-fractional floats and shrinks to them.
 
@@ -1606,8 +1615,9 @@ anyNumericFloat =
         }
 
 
-{-| Ranges over all possible floats: [-1.7976931348623157e308, 1.7976931348623157e308]
-and also the +Infinity, -Infinity and NaN.
+{-| Ranges over all possible `Float`s:
+`[-1.7976931348623157e308, 1.7976931348623157e308]`
+and also the `Infinity`, `-Infinity` and `NaN`.
 
 Prefers nice non-fractional floats and shrinks to them.
 
@@ -1725,7 +1735,7 @@ scaledFloat min max =
             |> filter (not << isInfinite)
 
 
-{-| Fuzzes a float, giving you the options to customize the range and presence
+{-| Fuzzes a `Float`, giving you the options to customize the range and presence
 of certain edge-case values.
 
      Fuzz.example
