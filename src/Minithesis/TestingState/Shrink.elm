@@ -117,35 +117,39 @@ deleteChunkAndMaybeDecrementPrevious :
     -> TestingState a
     -> Maybe ( TestingState a, TestCase )
 deleteChunkAndMaybeDecrementPrevious meta randomRun state =
-    let
-        runWithDeletedChunk =
-            RandomRun.deleteChunk meta randomRun
-    in
-    case Internal.runTest (TestCase.forRun runWithDeletedChunk) state of
-        Err err ->
-            Nothing
+    if meta.startIndex + meta.chunkSize > RandomRun.length randomRun then
+        Nothing
 
-        Ok ( nextState, testCase ) ->
-            if TestCase.isInteresting testCase then
-                Just ( nextState, testCase )
-
-            else if
-                (meta.startIndex > 0)
-                    && (RandomRun.get (meta.startIndex - 1) runWithDeletedChunk /= Just 0)
-            then
-                {- Try reducing the number before this removed chunk,
-                   it's frequently the length parameter.
-                -}
-                let
-                    runWithDecrementedValue =
-                        runWithDeletedChunk
-                            |> RandomRun.update (meta.startIndex - 1) (\x -> x - 1)
-                in
-                Internal.runTest (TestCase.forRun runWithDecrementedValue) nextState
-                    |> Result.toMaybe
-
-            else
+    else
+        let
+            runWithDeletedChunk =
+                RandomRun.deleteChunk meta randomRun
+        in
+        case Internal.runTest (TestCase.forRun runWithDeletedChunk) state of
+            Err err ->
                 Nothing
+
+            Ok ( nextState, testCase ) ->
+                if TestCase.isInteresting testCase then
+                    Just ( nextState, testCase )
+
+                else if
+                    (meta.startIndex > 0)
+                        && (RandomRun.get (meta.startIndex - 1) runWithDeletedChunk /= Just 0)
+                then
+                    {- Try reducing the number before this removed chunk,
+                       it's frequently the length parameter.
+                    -}
+                    let
+                        runWithDecrementedValue =
+                            runWithDeletedChunk
+                                |> RandomRun.update (meta.startIndex - 1) (\x -> x - 1)
+                    in
+                    Internal.runTest (TestCase.forRun runWithDecrementedValue) nextState
+                        |> Result.toMaybe
+
+                else
+                    Nothing
 
 
 replaceChunkWithZero :
