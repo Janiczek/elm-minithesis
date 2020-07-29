@@ -1,5 +1,6 @@
 module Minithesis.TestingState exposing
-    ( Test(..)
+    ( ShrinkCommand(..)
+    , Test(..)
     , TestingState
     , generate
     , init
@@ -7,7 +8,7 @@ module Minithesis.TestingState exposing
     , stopIfUnsatisfiable
     )
 
-import Minithesis.Fuzz exposing (Fuzzer)
+import Minithesis.Fuzz.Internal as Fuzz exposing (Fuzzer)
 import Minithesis.RandomRun as RandomRun exposing (RandomRun)
 import Minithesis.Stop exposing (Stop(..))
 import Minithesis.TestCase as TestCase
@@ -31,6 +32,7 @@ type alias TestingState a =
     -- config
     { seed : Random.Seed
     , maxExamples : Int
+    , showShrinkHistory : Bool
     , label : String
     , userTestFn : TestCase -> Result ( Stop, TestCase ) TestCase
     , fuzzer : Fuzzer a
@@ -39,6 +41,8 @@ type alias TestingState a =
     , validTestCases : Int
     , calls : Int
     , bestCounterexample : Maybe RandomRun
+    , previousBestCounterexample : Maybe RandomRun
+    , shrinkHistory : List ( a, RandomRun, Maybe ShrinkCommand )
     }
 
 
@@ -53,17 +57,21 @@ bufferSize =
 init :
     Random.Seed
     -> Int
+    -> Bool
     -> Test a
     -> TestingState a
-init seed maxExamples (Test { label, userTestFn, fuzzer }) =
+init seed maxExamples showShrinkHistory (Test { label, userTestFn, fuzzer }) =
     { seed = seed
     , maxExamples = maxExamples
+    , showShrinkHistory = showShrinkHistory
     , label = label
     , userTestFn = markFailuresInteresting userTestFn
     , fuzzer = fuzzer
     , validTestCases = 0
     , calls = 0
     , bestCounterexample = Nothing
+    , previousBestCounterexample = Nothing
+    , shrinkHistory = []
     }
 
 
@@ -152,6 +160,12 @@ runTest testCase state =
                 , seed =
                     testCase1.seed
                         |> Maybe.withDefault state.seed
+                , shrinkHistory =
+                    if state.showShrinkHistory then
+                        state.shrinkHistory
+
+                    else
+                        state.shrinkHistory
             }
     in
     if state.bestCounterexample == Just testCase.prefix then
@@ -212,10 +226,35 @@ shrink result =
                         result
 
                     else
-                        Ok <| iterateShrinkWhileProgress counterexample state
+                        state
+                            |> addShrinkToHistory Nothing counterexample
+                            |> iterateShrinkWhileProgress counterexample
+                            |> Ok
 
         Err _ ->
             result
+
+
+addShrinkToHistory : Maybe ShrinkCommand -> RandomRun -> TestingState a -> TestingState a
+addShrinkToHistory cmd counterexample state =
+    if state.showShrinkHistory then
+        if state.previousBestCounterexample == Just counterexample then
+            state
+
+        else
+            case Fuzz.run state.fuzzer (TestCase.forRun counterexample) of
+                Ok ( value, _ ) ->
+                    { state
+                        | shrinkHistory = ( value, counterexample, cmd ) :: state.shrinkHistory
+                        , previousBestCounterexample = Just counterexample
+                    }
+
+                Err _ ->
+                    -- shouldn't happen
+                    state
+
+    else
+        state
 
 
 iterateShrinkWhileProgress : RandomRun -> TestingState a -> TestingState a
@@ -248,11 +287,14 @@ shrinkOnce counterexample state =
     runShrinkCommands (shrinkCommandsFor counterexample) counterexample state
 
 
+{-| Fail if can't shrink successfully. This will be picked upon in
+runShrinkCommands; it won't halt the whole thing.
+-}
 runShrinkCommand :
     ShrinkCommand
     -> RandomRun
     -> TestingState a
-    -> Result ( Stop, TestCase ) ( TestingState a, TestCase )
+    -> Maybe ( TestingState a, TestCase )
 runShrinkCommand cmd randomRun state =
     case cmd of
         DeleteChunk meta ->
@@ -262,7 +304,7 @@ runShrinkCommand cmd randomRun state =
             in
             case runTest (TestCase.forRun runWithDeletedChunk) state of
                 Err err ->
-                    Err err
+                    Nothing
 
                 Ok ( nextState, testCase ) ->
                     if
@@ -279,22 +321,18 @@ runShrinkCommand cmd randomRun state =
                                     |> RandomRun.update (meta.startIndex - 1) (\x -> x - 1)
                         in
                         runTest (TestCase.forRun runWithDecrementedValue) nextState
+                            |> Result.toMaybe
 
                     else
-                        Ok ( nextState, testCase )
+                        Nothing
 
         ReplaceChunkWithZero meta ->
-            runTest
-                (TestCase.forRun (RandomRun.replaceChunkWithZero meta randomRun))
-                state
+            runTest (TestCase.forRun (RandomRun.replaceChunkWithZero meta randomRun)) state
+                |> Result.toMaybe
 
         MinimizeChoiceWithBinarySearch { index } ->
-            let
-                testCase =
-                    TestCase.forRun randomRun
-            in
             RandomRun.get index randomRun
-                |> Maybe.map
+                |> Maybe.andThen
                     (\value ->
                         binarySearch
                             (\newValue run -> RandomRun.set index newValue run)
@@ -303,13 +341,12 @@ runShrinkCommand cmd randomRun state =
                             }
                             randomRun
                             state
+                            |> Result.toMaybe
                     )
-                |> Maybe.withDefault (Ok ( state, testCase ))
 
         SortChunk meta ->
-            runTest
-                (TestCase.forRun (RandomRun.sortChunk meta randomRun))
-                state
+            runTest (TestCase.forRun (RandomRun.sortChunk meta randomRun)) state
+                |> Result.toMaybe
 
         RedistributeChoices meta ->
             {- First we try swapping them if left > right.
@@ -319,11 +356,12 @@ runShrinkCommand cmd randomRun state =
             -}
             case RandomRun.swapIfOutOfOrder meta randomRun of
                 Nothing ->
-                    Ok ( state, TestCase.forRun randomRun )
+                    Nothing
 
                 Just { newRun, newLeft, newRight } ->
                     runTest (TestCase.forRun newRun) state
-                        |> Result.andThen
+                        |> Result.toMaybe
+                        |> Maybe.andThen
                             (\( state_, testCase ) ->
                                 if meta.rightIndex < RandomRun.length newRun && newLeft > 0 then
                                     binarySearch
@@ -339,9 +377,10 @@ runShrinkCommand cmd randomRun state =
                                         }
                                         newRun
                                         state_
+                                        |> Result.toMaybe
 
                                 else
-                                    Ok ( state_, testCase )
+                                    Nothing
                             )
 
 
@@ -445,16 +484,26 @@ runShrinkCommands cmds randomRun state =
                     result
 
                 Ok ( accRandomRun, accState ) ->
-                    runShrinkCommand cmd accRandomRun accState
-                        |> Result.andThen
-                            (\( newState, testCase ) ->
-                                case newState.bestCounterexample of
-                                    Nothing ->
-                                        Err ( LostCounterexample, testCase )
+                    case runShrinkCommand cmd accRandomRun accState of
+                        Nothing ->
+                            {- Shrink command was unsuccessful. Keep on going, just ignore this one!
+                               As shrinks don't advance the seeds, there's nothing to salvage here.
+                            -}
+                            result
 
-                                    Just newChoice ->
-                                        Ok ( newChoice, newState )
-                            )
+                        Just ( newState, testCase ) ->
+                            -- That command was successful, great, continue!
+                            case newState.bestCounterexample of
+                                Nothing ->
+                                    -- shouldn't happen
+                                    Err ( LostCounterexample, testCase )
+
+                                Just newChoice ->
+                                    Ok
+                                        ( newChoice
+                                        , newState
+                                            |> addShrinkToHistory (Just cmd) newChoice
+                                        )
         )
         (Ok ( randomRun, state ))
         cmds

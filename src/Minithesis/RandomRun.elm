@@ -12,6 +12,7 @@ module Minithesis.RandomRun exposing
     , set
     , sortChunk
     , swapIfOutOfOrder
+    , toList
     , update
     )
 
@@ -156,3 +157,8 @@ swapIfOutOfOrder { leftIndex, rightIndex } run =
 update : Int -> (Int -> Int) -> RandomRun -> RandomRun
 update index fn run =
     Array.Extra.update index fn run
+
+
+toList : RandomRun -> List Int
+toList run =
+    Array.toList run
