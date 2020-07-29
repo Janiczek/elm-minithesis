@@ -73,15 +73,11 @@ M.runWith
     { finalRun = [1,88,0]
     , finalValue = "x"
     , history = 
-        [ { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,1,46,1,75,1,45,1,15,0], shrinkerUsed = "Initial",                                   value = "'xpvdQ1ONkM/" }
-        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,0],                     shrinkerUsed = "DeleteChunk { size = 8, startIndex = 17 }", value = "'xpvdQ1O"     }
-        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,0],                          shrinkerUsed = "DeleteChunk { size = 8, startIndex = 15 }", value = "'xpvdQ1"      }
-        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,0],                               shrinkerUsed = "DeleteChunk { size = 8, startIndex = 13 }", value = "'xpvdQ"       }
-        , { run = [1,7,1,88,1,80,1,86,1,68,0],                                    shrinkerUsed = "DeleteChunk { size = 8, startIndex = 11 }", value = "'xpvd"        }
-        , { run = [1,7,1,88,1,80,1,86,0],                                         shrinkerUsed = "DeleteChunk { size = 8, startIndex = 9 }",  value = "'xpv"         }
-        , { run = [1,7,1,88,1,80,0],                                              shrinkerUsed = "DeleteChunk { size = 8, startIndex = 7 }",  value = "'xp"          }
-        , { run = [1,7,1,88,0],                                                   shrinkerUsed = "DeleteChunk { size = 8, startIndex = 5 }",  value = "'x"           }
-        , { run = [1,88,0],                                                       shrinkerUsed = "DeleteChunk { size = 2, startIndex = 1 }",  value = "x"            }
+        [ { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,1,46,1,75,1,45,1,15,0], shrinkerUsed = "Initial",                                                            value = "'xpvdQ1ONkM/" }
+        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,0],                     shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 8, startIndex = 17 }", value = "'xpvdQ1O"     }
+        , { run = [1,7,1,88,1,80,1,86,0],                                         shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 8, startIndex = 9 }",  value = "'xpv"         }
+        , { run = [1,7,1,88,0],                                                   shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 4, startIndex = 5 }",  value = "'x"           }
+        , { run = [1,88,0],                                                       shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 2, startIndex = 1 }",  value = "x"            }
         ]
     }
 )
