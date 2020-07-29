@@ -17,12 +17,12 @@ listOfIntegers =
 
 findsSmallList : Test (List Int)
 findsSmallList =
-    Minithesis.test "My awesome test" listOfIntegers <|
+    Minithesis.test "list always sums under 1000 lol" listOfIntegers <|
         \fuzzedList ->
             List.sum fuzzedList <= 1000
 
 
-{-| Will fail and shrink to the minimal example: `( "My awesome test", FailsWith [ 1001 ] )`
+{-| Will fail and shrink to the minimal example: `( "list always sums under 1000 lol", FailsWith [ 1001 ] )`
 -}
 minithesisTestResult : Int -> TestResult (List Int)
 minithesisTestResult seed =
@@ -64,22 +64,21 @@ M.runWith
   , showShrinkHistory = True 
   } 
   1
-  (M.test "strings never contain 'x'"
-    F.string
-    (\string -> not (String.contains "x" string))
+  (M.test "list always sums under 1000 lol"
+    (F.list (F.int 0 10000))
+    (\list -> List.sum list <= 1000)
   )
   
-( "strings never contain 'x'"
+( "list always sums under 1000 lol"
 , FailsWithShrinks 
-    { finalRun = [1,88,0]
-    , finalValue = "x"
+    { finalRun = [1,1001,0]
+    , finalValue = [1001]
     , history = 
-        [ { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,1,46,1,75,1,45,1,15,0], shrinkerUsed = "Initial",                                                            value = "'xpvdQ1ONkM/" }
-        , { run = [1,7,1,88,1,80,1,86,1,68,1,49,1,17,1,47,0],                     shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 8, startIndex = 17 }", value = "'xpvdQ1O"     }
-        , { run = [1,7,1,88,1,80,1,86,0],                                         shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 8, startIndex = 9 }",  value = "'xpv"         }
-        , { run = [1,7,1,88,0],                                                   shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 4, startIndex = 5 }",  value = "'x"           }
-        , { run = [1,88,0],                                                       shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 2, startIndex = 1 }",  value = "x"            }
-        ]
+        [ { run = [1,166,1,5536,1,4725,1,8499,1,7844,1,1727,0], shrinkerUsed = "Initial",                                                           value = [166,5536,4725,8499,7844,1727] }
+        , { run = [1,166,1,5536,0],                             shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 8, startIndex = 5 }", value = [166,5536]                     }
+        , { run = [1,5536,0],                                   shrinkerUsed = "DeleteChunkAndMaybeDecrementPrevious { size = 2, startIndex = 1 }", value = [5536]                         }
+        , { run = [1,1001,0],                                   shrinkerUsed = "MinimizeChoiceWithBinarySearch { index = 1 }",                      value = [1001]                         }
+        ] 
     }
 )
 ```
