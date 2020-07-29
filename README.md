@@ -2,8 +2,9 @@
 
 This is an Elm port of [Minithesis](https://github.com/drmaciver/minithesis),
 the minimal implementation of the core idea of
-[Hypothesis](https://github.com/HypothesisWorks/hypothesis). See more under the
-[About](#About) heading.
+[Hypothesis](https://github.com/HypothesisWorks/hypothesis).
+
+> See more in the [About](#About) section.
 
 ```elm
 import Minithesis.Fuzz as Fuzz exposing (Fuzzer)
