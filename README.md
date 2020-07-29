@@ -40,18 +40,19 @@ sanity checks of your fuzzers!
 import Minithesis.Fuzz as F
 
 F.string |> F.exampleWithSeed 0
--- gives a list of examples:
---> ["x","I","","6a=U",";W?","uDc",":ei_^~","=Y","-NAT\\QJ","{92H2DI}-(KOc"]
+--> gives 10 examples
+["x","I","","6a=U",";W?","uDc",":ei_^~","=Y","-NAT\\QJ","{92H2DI}-(KOc"]
 
 F.string |> F.exampleWithSeed 1
--- gives another list of examples:
---> ["KI","<j XT","","'xpvdQ1ONkM/","tdVd_v","I3=:e0i3","","P)y8$e@^y}1s",",]uz\\","8"]
+--> different seed -> different examples
+["KI","<j XT","","'xpvdQ1ONkM/","tdVd_v","I3=:e0i3","","P)y8$e@^y}1s",",]uz\\","8"]
 ```
 
 ## Inspect shrink history
 
 Use the `showShrinkHistory` field of `Minithesis.runWith` to get additional
-information about how shrinking of your data went. This gives a bit of
+information about how shrinking of your data went. All `FailsWith` results
+become `FailsWithShrinks` containing additional info. This gives a bit of
 visibility into what happens in the black box that Minithesis shrinking is. 
 
 
@@ -68,7 +69,7 @@ M.runWith
     (F.list (F.int 0 10000))
     (\list -> List.sum list <= 1000)
   )
-  
+--> 
 ( "list always sums under 1000 lol"
 , FailsWithShrinks 
     { finalRun = [1,1001,0]
@@ -124,4 +125,4 @@ There is a small piece of internet dedicated to `elm-minithesis`: [the
 Discord](https://discord.gg/PC7Ckpg). Come join and hear about updates first!
 
 The original discussion around `elm-minithesis` happened on the [Elm
-Discourse](https://discourse.elm-lang.org/t/elm-minithesis-shrinking-without-compromises/6071/)
+Discourse](https://discourse.elm-lang.org/t/elm-minithesis-shrinking-without-compromises/6071/).
