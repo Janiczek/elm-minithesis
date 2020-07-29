@@ -8,7 +8,7 @@ import OurExtras.List as List
 import Random
 import Set
 import Shrink
-import Test exposing (Test, describe, fuzzWith, test, todo)
+import Test exposing (Test, describe, fuzz, test, todo)
 
 
 suite : Test
