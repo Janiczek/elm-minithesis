@@ -307,9 +307,11 @@ runShrinkCommand cmd randomRun state =
                     Nothing
 
                 Ok ( nextState, testCase ) ->
-                    if
-                        not (TestCase.isInteresting testCase)
-                            && (meta.startIndex > 0)
+                    if TestCase.isInteresting testCase then
+                        Just ( nextState, testCase )
+
+                    else if
+                        (meta.startIndex > 0)
                             && (RandomRun.get (meta.startIndex - 1) runWithDeletedChunk /= Just 0)
                     then
                         {- Try reducing the number before this removed chunk,

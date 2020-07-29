@@ -82,6 +82,9 @@ import Set exposing (Set)
 
 
 
+-- TODO more whitespace in string/char fuzzer?
+-- TODO ints shrinking toward zero?
+-- TODO negative floats shrinking to positive floats?
 -- 1) UNDERLYING ABSTRACTION
 
 
