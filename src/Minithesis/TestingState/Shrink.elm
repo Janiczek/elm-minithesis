@@ -158,8 +158,12 @@ replaceChunkWithZero :
     -> TestingState a
     -> Maybe ( TestingState a, TestCase )
 replaceChunkWithZero meta randomRun state =
-    Internal.runTest (TestCase.forRun (RandomRun.replaceChunkWithZero meta randomRun)) state
-        |> Result.toMaybe
+    if meta.startIndex + meta.chunkSize > RandomRun.length randomRun then
+        Nothing
+
+    else
+        Internal.runTest (TestCase.forRun (RandomRun.replaceChunkWithZero meta randomRun)) state
+            |> Result.toMaybe
 
 
 minimizeChoiceWithBinarySearch :
@@ -168,18 +172,22 @@ minimizeChoiceWithBinarySearch :
     -> TestingState a
     -> Maybe ( TestingState a, TestCase )
 minimizeChoiceWithBinarySearch { index } randomRun state =
-    RandomRun.get index randomRun
-        |> Maybe.andThen
-            (\value ->
-                binarySearch
-                    (\newValue run -> RandomRun.set index newValue run)
-                    { low = 0
-                    , high = value
-                    }
-                    randomRun
-                    state
-                    |> Result.toMaybe
-            )
+    if index > RandomRun.length randomRun then
+        Nothing
+
+    else
+        RandomRun.get index randomRun
+            |> Maybe.andThen
+                (\value ->
+                    binarySearch
+                        (\newValue run -> RandomRun.set index newValue run)
+                        { low = 0
+                        , high = value
+                        }
+                        randomRun
+                        state
+                        |> Result.toMaybe
+                )
 
 
 sortChunk :
@@ -188,8 +196,12 @@ sortChunk :
     -> TestingState a
     -> Maybe ( TestingState a, TestCase )
 sortChunk meta randomRun state =
-    Internal.runTest (TestCase.forRun (RandomRun.sortChunk meta randomRun)) state
-        |> Result.toMaybe
+    if meta.startIndex + meta.chunkSize > RandomRun.length randomRun then
+        Nothing
+
+    else
+        Internal.runTest (TestCase.forRun (RandomRun.sortChunk meta randomRun)) state
+            |> Result.toMaybe
 
 
 redistributeChoices :
@@ -198,36 +210,44 @@ redistributeChoices :
     -> TestingState a
     -> Maybe ( TestingState a, TestCase )
 redistributeChoices meta randomRun state =
-    {- First we try swapping them if left > right.
+    let
+        length =
+            RandomRun.length randomRun
+    in
+    if meta.leftIndex > length || meta.rightIndex > length then
+        Nothing
 
-       Then we try to (binary-search) minimize the left while keeping the
-       sum constant (so what we subtract from left we add to right).
-    -}
-    case RandomRun.swapIfOutOfOrder meta randomRun of
-        Nothing ->
-            Nothing
+    else
+        {- First we try swapping them if left > right.
 
-        Just { newRun, newLeft, newRight } ->
-            Internal.runTest (TestCase.forRun newRun) state
-                |> Result.toMaybe
-                |> Maybe.andThen
-                    (\( state_, _ ) ->
-                        if meta.rightIndex < RandomRun.length newRun && newLeft > 0 then
-                            binarySearch
-                                (\newValue run ->
-                                    RandomRun.replace
-                                        [ ( meta.leftIndex, newValue )
-                                        , ( meta.rightIndex, newRight + newLeft - newValue )
-                                        ]
-                                        run
-                                )
-                                { low = 0
-                                , high = newLeft
-                                }
-                                newRun
-                                state_
-                                |> Result.toMaybe
+           Then we try to (binary-search) minimize the left while keeping the
+           sum constant (so what we subtract from left we add to right).
+        -}
+        case RandomRun.swapIfOutOfOrder meta randomRun of
+            Nothing ->
+                Nothing
 
-                        else
-                            Nothing
-                    )
+            Just { newRun, newLeft, newRight } ->
+                Internal.runTest (TestCase.forRun newRun) state
+                    |> Result.toMaybe
+                    |> Maybe.andThen
+                        (\( state_, _ ) ->
+                            if meta.rightIndex < RandomRun.length newRun && newLeft > 0 then
+                                binarySearch
+                                    (\newValue run ->
+                                        RandomRun.replace
+                                            [ ( meta.leftIndex, newValue )
+                                            , ( meta.rightIndex, newRight + newLeft - newValue )
+                                            ]
+                                            run
+                                    )
+                                    { low = 0
+                                    , high = newLeft
+                                    }
+                                    newRun
+                                    state_
+                                    |> Result.toMaybe
+
+                            else
+                                Nothing
+                        )
