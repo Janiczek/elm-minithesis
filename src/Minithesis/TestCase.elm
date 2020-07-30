@@ -1,6 +1,7 @@
 module Minithesis.TestCase exposing
     ( Status(..)
     , TestCase
+    , defaultBufferSize
     , forRun
     , init
     , isInteresting
@@ -69,3 +70,11 @@ markStatus status testCase =
 isInteresting : TestCase -> Bool
 isInteresting { status } =
     status == Interesting
+
+
+{-| We cap the maximum amount of entropy a test case can use. This prevents
+cases where the generated test case size explodes by effectively rejection.
+-}
+defaultBufferSize : Int
+defaultBufferSize =
+    8 * 1024

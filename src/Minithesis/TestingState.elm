@@ -32,14 +32,6 @@ type Test a
         }
 
 
-{-| We cap the maximum amount of entropy a test case can use. This prevents
-cases where the generated test case size explodes by effectively rejection.
--}
-bufferSize : Int
-bufferSize =
-    8 * 1024
-
-
 init :
     Random.Seed
     -> Int
@@ -97,7 +89,7 @@ generate result =
                         (TestCase.init
                             { prefix = RandomRun.empty
                             , seed = state.seed
-                            , maxSize = bufferSize
+                            , maxSize = TestCase.defaultBufferSize
                             }
                         )
                         state

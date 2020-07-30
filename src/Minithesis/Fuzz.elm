@@ -1,5 +1,5 @@
 module Minithesis.Fuzz exposing
-    ( Fuzzer, example, exampleWithSeed
+    ( Fuzzer, example, exampleWithSeed, generate, generateWithSeed
     , bool, weightedBool
     , int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
     , float, anyNumericFloat, anyFloat, floatWith, probability
@@ -22,7 +22,7 @@ module Minithesis.Fuzz exposing
 
 # The basics
 
-@docs Fuzzer, example, exampleWithSeed
+@docs Fuzzer, example, exampleWithSeed, generate, generateWithSeed
 
 
 # Values
@@ -188,6 +188,110 @@ exampleWithSeed seedInt (Fuzzer fn) =
                             acc
     in
     go 100 10 (Random.initialSeed seedInt) []
+
+
+{-| Make the fuzzer generate an example.
+
+It will start with the seed 0, try 100 times and then give up (so that eg.
+`Fuzz.generate Fuzz.reject` won't freeze your computer).
+
+-}
+generate : Fuzzer a -> Maybe a
+generate ((Fuzzer fuzzer) as wrappedFuzzer) =
+    let
+        fallbackSeed : Random.Seed -> Random.Seed
+        fallbackSeed seed =
+            seed
+                |> Random.step (Random.constant ())
+                |> Tuple.second
+
+        go : Int -> Random.Seed -> Maybe a
+        go tries seed =
+            if tries <= 0 then
+                Nothing
+
+            else
+                let
+                    result_ =
+                        fuzzer
+                            (TestCase.init
+                                { seed = seed
+                                , maxSize = TestCase.defaultBufferSize
+                                , prefix = RandomRun.empty
+                                }
+                            )
+                in
+                case result_ of
+                    Ok ( value, _ ) ->
+                        Just value
+
+                    Err ( _, testCase ) ->
+                        go
+                            (tries - 1)
+                            (case testCase.seed of
+                                Nothing ->
+                                    fallbackSeed seed
+
+                                Just seed_ ->
+                                    seed_
+                            )
+    in
+    go 100 (Random.initialSeed 0)
+
+
+{-| Make the fuzzer generate an example with the given seed.
+
+It will start with the given seed, try 100 times and then give up (so that eg.
+`Fuzz.generate Fuzz.reject` won't freeze your computer).
+
+-}
+generateWithSeed : Random.Seed -> Fuzzer a -> Maybe ( a, Random.Seed )
+generateWithSeed initSeed ((Fuzzer fuzzer) as wrappedFuzzer) =
+    let
+        fallbackSeed : Random.Seed -> Random.Seed
+        fallbackSeed seed =
+            seed
+                |> Random.step (Random.constant ())
+                |> Tuple.second
+
+        nextSeed : Random.Seed -> Maybe Random.Seed -> Random.Seed
+        nextSeed previousSeed maybeNextSeed =
+            case maybeNextSeed of
+                Just seed ->
+                    seed
+
+                Nothing ->
+                    fallbackSeed previousSeed
+
+        go : Int -> Random.Seed -> Maybe ( a, Random.Seed )
+        go tries seed =
+            if tries <= 0 then
+                Nothing
+
+            else
+                let
+                    result_ =
+                        fuzzer
+                            (TestCase.init
+                                { seed = seed
+                                , maxSize = TestCase.defaultBufferSize
+                                , prefix = RandomRun.empty
+                                }
+                            )
+                in
+                case result_ of
+                    Ok ( value, testCase ) ->
+                        Just
+                            ( value
+                            , nextSeed seed testCase.seed
+                            )
+
+                    Err ( _, testCase ) ->
+                        go
+                            (tries - 1)
+                            (nextSeed seed testCase.seed)
+    in
+    go 100 initSeed
 
 
 {-| All fuzzers need to somehow go through picking an `Int`.
