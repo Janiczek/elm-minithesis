@@ -97,6 +97,8 @@ Paired with some knowledge about which shrinking strategies there are and what
 they do, you can sometimes tweak your fuzzers to optimize how they interact with
 the shrinking process, allowing them to be shrunk better.
 
+(Related: [Hypothesis docs: "Strategies that shrink"](https://github.com/HypothesisWorks/hypothesis/blob/master/guides/strategies-that-shrink.rst))
+
 # About
 
 `elm-minithesis` is a property-based testing library based on [Minithesis](https://github.com/drmaciver/minithesis), which is the minimal implementation of the core idea of [Hypothesis](https://github.com/HypothesisWorks/hypothesis).
@@ -128,7 +130,7 @@ same invariants the `andThen`-generated values do. Hypothesis instead shrinks
 the underlying "dice roll" history and generates a new value from that, so
 its values satisfy the invariants out of the box even if using `andThen`!
 
-(Source: ["Integrated vs type based shrinking"](https://hypothesis.works/articles/integrated-shrinking/))
+(Source: [Hypothesis blog: "Integrated vs type based shrinking"](https://hypothesis.works/articles/integrated-shrinking/))
 
 # Community
 

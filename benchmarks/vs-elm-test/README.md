@@ -1,3 +1,7 @@
+There is a spreadsheet for these benchmark measurements: https://docs.google.com/spreadsheets/d/1Yk2smqvaT6KfnNBDdMclBTIsjAnoWnwedI31JmPOrdE/edit?usp=sharing
+
+# How to add a benchmark, the easy way
+
 1. Copy the `_template` folder
 2. Change the definition inside `src/Main.elm`
 3. Compile with `elm make src/Main.elm`
