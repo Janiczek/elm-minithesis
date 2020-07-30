@@ -30,7 +30,11 @@ suite =
 
         minithesisTest () =
             -- implicit 100 examples
-            Minithesis.run 0
+            Minithesis.runWith
+                { maxExamples = 100
+                , showSearchHistory = False
+                }
+                0
                 (Minithesis.test
                     "minithesis"
                     minithesisFuzzer
