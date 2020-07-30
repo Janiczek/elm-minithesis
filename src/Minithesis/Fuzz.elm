@@ -239,10 +239,10 @@ generate ((Fuzzer fuzzer) as wrappedFuzzer) =
     go 100 (Random.initialSeed 0)
 
 
-{-| Make the fuzzer generate an example with the given seed.
+{-| Make the fuzzer generate an example with the given `Random.Seed`.
 
-It will start with the given seed, try 100 times and then give up (so that eg.
-`Fuzz.generate Fuzz.reject` won't freeze your computer).
+It will start with the given `Random.Seed`, try 100 times and then give up (so
+that eg. `Fuzz.generate Fuzz.reject` won't freeze your computer).
 
 -}
 generateWithSeed : Random.Seed -> Fuzzer a -> Maybe ( a, Random.Seed )
