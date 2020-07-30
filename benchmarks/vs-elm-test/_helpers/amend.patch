@@ -1,0 +1,90 @@
+--- index.html	2020-07-30 14:49:44.441651832 +0200
++++ amended.html	2020-07-30 14:54:30.004559938 +0200
+@@ -15,6 +15,14 @@
+ (function(scope){
+ 'use strict';
+ 
++let hasLogged = false;
++let minithesisRunCounter = 0;
++let minithesisFnCounter = 0;
++let elmTestRunCounter = 0;
++let elmTestFnCounter = 0;
++let minithesisResult = null;
++let elmTestResult = null;
++
+ function F(arity, fun, wrapper) {
+   wrapper.a = arity;
+   wrapper.f = fun;
+@@ -6104,6 +6112,7 @@
+ 	}
+ };
+ var $elm_explorations$benchmark$Benchmark$done = function (benchmark_) {
++	const result = (() => {
+ 	switch (benchmark_.$) {
+ 		case 'Single':
+ 			var status = benchmark_.c;
+@@ -6126,7 +6135,23 @@
+ 		default:
+ 			var benchmarks = benchmark_.b;
+ 			return A2($elm$core$List$all, $elm_explorations$benchmark$Benchmark$done, benchmarks);
++	}})();
++	if (result) {
++		if (!hasLogged) {
++			console.log({
++				minithesisRunCounter,
++				minithesisFnCounter,
++				minithesisResult,
++				minithesisFnPerRun: minithesisFnCounter / minithesisRunCounter,
++				elmTestRunCounter,
++				elmTestFnCounter,
++				elmTestResult,
++				elmTestFnPerRun: elmTestFnCounter / elmTestRunCounter,
++			});
++			hasLogged = true;
++		}
+ 	}
++	return result;
+ };
+ var $elm$core$Platform$Cmd$batch = _Platform_batch;
+ var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
+@@ -17206,7 +17231,8 @@
+ var $author$project$OurBenchmark$suite = function (options) {
+ 	var seed0 = $elm$random$Random$initialSeed(0);
+ 	var minithesisTest = function (_v8) {
+-		return A3(
++		minithesisRunCounter++;
++		minithesisResout = A3(
+ 			$author$project$Minithesis$runWith,
+ 			{maxExamples: 100, showShrinkHistory: false},
+ 			0,
+@@ -17216,6 +17242,7 @@
+ 		return $author$project$Minithesis$Fuzz$generate(options.minithesisFuzzer);
+ 	};
+ 	var elmTestTest = function (_v6) {
++		elmTestRunCounter++;
+ 		var runners = A3(
+ 			$elm_explorations$test$Test$Runner$fromTest,
+ 			100,
+@@ -17227,7 +17254,8 @@
+ 				return A2(
+ 					$elm$core$List$map,
+ 					function (runner) {
+-						return runner.run(_Utils_Tuple0);
++						elmTestResult = runner.run(_Utils_Tuple0);
++						return elmTestResult;
+ 					},
+ 					xs);
+ 			case 'Only':
+@@ -17296,10 +17324,12 @@
+ var $author$project$Main$main = $author$project$OurBenchmark$ourBenchmark(
+ 	{
+ 		elmTestFn: function (i) {
++			elmTestFnCounter++;
+ 			return A2($elm_explorations$test$Expect$lessThan, 5000, i);
+ 		},
+ 		elmTestFuzzer: A2($elm_explorations$test$Fuzz$intRange, 0, 10000),
+ 		minithesisFn: function (i) {
++			minithesisFnCounter++;
+ 			return i < 5000;
+ 		},
+ 		minithesisFuzzer: A2($author$project$Minithesis$Fuzz$int, 0, 10000),
