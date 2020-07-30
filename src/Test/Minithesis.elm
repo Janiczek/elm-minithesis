@@ -2,6 +2,13 @@ module Test.Minithesis exposing (mFuzz, mFuzzWith)
 
 {-| Interop with `elm-explorations/test`.
 
+These functions start Minithesis with a random seed.
+
+Note: when using Minithesis tests with `elm-test` fuzzers, the `{ runs : Int }`
+from `elm-test` and `{ maxExamples : Int }` from Minithesis multiply together.
+So if your tests have a long running time, you can try lowering your `elm-test`
+fuzz runs setting, eg. with `elm-test --fuzz 10` etc.
+
 @docs mFuzz, mFuzzWith
 
 -}
