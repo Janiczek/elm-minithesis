@@ -53,7 +53,7 @@
  	var minithesisTest = function (_v8) {
 -		return A3(
 +		minithesisRunCounter++;
-+		minithesisResout = A3(
++		minithesisResult = A3(
  			$author$project$Minithesis$runWith,
  			{maxExamples: 100, showShrinkHistory: false},
  			0,
