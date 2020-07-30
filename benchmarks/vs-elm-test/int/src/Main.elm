@@ -32,7 +32,7 @@ suite =
             -- implicit 100 examples
             Minithesis.runWith
                 { maxExamples = 100
-                , showSearchHistory = False
+                , showShrinkHistory = False
                 }
                 0
                 (Minithesis.test
