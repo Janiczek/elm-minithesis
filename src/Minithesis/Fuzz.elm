@@ -583,7 +583,7 @@ anyInt =
             round (0 / 0)
     in
     frequency
-        [ ( 10, anyNumericInt )
+        [ ( 5, anyNumericInt )
         , ( 1, constant intInfinity )
         , ( 1, constant (negate intInfinity) )
         , ( 1, constant intNaN )
