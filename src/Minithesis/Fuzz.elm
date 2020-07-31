@@ -377,13 +377,13 @@ makeChoice n generator testCase =
 
 {-| Returns a number in the range `[0, n]` (inclusive).
 -}
-nonnegativeInt_ : Int -> Fuzzer Int
-nonnegativeInt_ n =
-    Fuzzer (makeChoice n (nonnegativeIntGenerator n))
+internalInt : Int -> Fuzzer Int
+internalInt n =
+    Fuzzer (makeChoice n (internalIntGenerator n))
 
 
-nonnegativeIntGenerator : Int -> Random.Generator Int
-nonnegativeIntGenerator n =
+internalIntGenerator : Int -> Random.Generator Int
+internalIntGenerator n =
     Random.int 0 n
 
 
@@ -496,7 +496,7 @@ int from to =
         reject
 
     else
-        nonnegativeInt_ (to - from)
+        internalInt (to - from)
             |> map (\n -> n + from)
 
 
@@ -1475,8 +1475,10 @@ stringWith { minLength, maxLength, customAverageLength, charFuzzer } =
         |> map String.fromList
 
 
-{-| Picks a fuzzer from the list and runs it. All fuzzers have the same chance
-to be picked.
+{-| Picks a fuzzer from the list and runs it. Each fuzzer has an equal chance to
+be picked; to customize the probabilities, use [`frequency`](#frequency).
+
+Shrinks towards the first item in the list.
 
      Fuzz.exampleWithSeed 3
         (Fuzz.oneOf
@@ -1496,7 +1498,7 @@ oneOf fuzzers =
             reject
 
         length ->
-            int 0 (length - 1)
+            internalInt (length - 1)
                 |> andThen
                     (\i ->
                         case List.head (List.drop i fuzzers) of
@@ -1509,7 +1511,10 @@ oneOf fuzzers =
                     )
 
 
-{-| Picks a value from the list. All values have the same chance to be picked.
+{-| Picks a value from the list. Each value has an equal chance to be picked; to
+customize the probabilities, use [`frequencyValues`](#frequency).
+
+Shrinks towards the first item in the list.
 
      Fuzz.example (Fuzz.oneOfValues [ 42, 999, 1 ])
      -->
@@ -1525,6 +1530,8 @@ oneOfValues items =
 
 Picks a fuzzer from the list and runs it. The chance to be picked is given for
 each fuzzer as a weight.
+
+Shrinks towards the first item in the list.
 
      Fuzz.example
         (Fuzz.frequency
@@ -1600,6 +1607,8 @@ frequency options =
 
 Picks a value from the list. The chance to be picked is given for each value as
 a weight.
+
+Shrinks towards the first item in the list.
 
      Fuzz.example
         (Fuzz.frequencyValues
