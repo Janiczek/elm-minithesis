@@ -8,7 +8,7 @@ import OurExtras.List as List
 import Random
 import Set
 import Shrink
-import Test exposing (Test, describe, fuzz, test, todo)
+import Test exposing (Test, describe, fuzz, skip, test, todo)
 
 
 suite : Test
@@ -91,6 +91,19 @@ testMinithesisCannotGenerateSatisfying name fuzzer predicate =
                 |> Minithesis.run seed
                 |> Tuple.second
                 |> Expect.notEqual Passes
+
+
+testMinithesisShrinksTowards : String -> a -> Fuzzer a -> (a -> Bool) -> Test
+testMinithesisShrinksTowards name value fuzzer predicate =
+    fuzz seedFuzzer name <|
+        \seed ->
+            Minithesis.test
+                ("Shrinks towards: " ++ name)
+                fuzzer
+                predicate
+                |> Minithesis.run seed
+                |> Tuple.second
+                |> Expect.equal (FailsWith value)
 
 
 general : Test
@@ -192,42 +205,37 @@ fuzzers =
                                 |> F.andThen (F.int from)
                         )
                 )
-            , testMinithesis "Random.minInt"
-                (F.int -2147483648 -2147483648)
-                (\n -> n == -2147483648)
-                Passes
-            , testMinithesis "Random.maxInt"
-                (F.int 2147483647 2147483647)
-                (\n -> n == 2147483647)
-                Passes
-            , testMinithesis "Full range"
-                (F.int -2147483648 2147483647)
-                (\n -> n >= -2147483648 && n <= 2147483647)
-                Passes
+            , testMinithesisCanGenerate "-(2^30 - 1)"
+                (F.int -1073741823 -1073741822)
+                -1073741823
+            , testMinithesisCanGenerate "2^30 - 1"
+                (F.int 1073741822 1073741823)
+                1073741823
+            , todo "Full range - randomly chosen boundaries"
             ]
-        , describe "anyInt"
+        , describe "reallyAnyInt"
             [ testMinithesis "Full range"
-                F.anyInt
+                F.reallyAnyInt
                 (\n ->
                     isInfinite (toFloat n)
                         || isNaN (toFloat n)
                         || (n >= -2147483648 && n <= 2147483647)
                 )
                 Passes
-            , testMinithesisCanGenerateSatisfying "any Infinity" F.anyInt (toFloat >> isInfinite)
-            , testMinithesisCanGenerateSatisfying "NaN" F.anyInt (toFloat >> isNaN)
+            , testMinithesisCanGenerateSatisfying "any Infinity" F.reallyAnyInt (toFloat >> isInfinite)
+            , testMinithesisCanGenerateSatisfying "NaN" F.reallyAnyInt (toFloat >> isNaN)
             ]
-        , describe "anyNumericInt"
+        , describe "anyInt"
             [ testMinithesis "Full range"
-                F.anyNumericInt
+                F.anyInt
                 (\n -> n >= -2147483648 && n <= 2147483647)
                 Passes
             , testMinithesis "Cannot generate any Infinity"
-                F.anyNumericInt
+                F.anyInt
                 (not << isInfinite << toFloat)
                 Passes
             , testMinithesis "Cannot generate NaN"
-                F.anyNumericInt
+                F.anyInt
                 (not << isNaN << toFloat)
                 Passes
             ]
@@ -336,27 +344,27 @@ fuzzers =
                 )
              ]
             )
-        , describe "anyNumericFloat"
-            [ testMinithesisCannotGenerateSatisfying "NaN" F.anyNumericFloat isNaN
-            , testMinithesisCannotGenerateSatisfying "infinities" F.anyNumericFloat isInfinite
+        , describe "anyFloat"
+            [ testMinithesisCannotGenerateSatisfying "NaN" F.anyFloat isNaN
+            , testMinithesisCannotGenerateSatisfying "infinities" F.anyFloat isInfinite
             , testMinithesis "Full range"
-                F.anyNumericFloat
+                F.anyFloat
                 (\f -> f >= -1.7976931348623157e308 && f <= 1.7976931348623157e308)
                 Passes
             ]
-        , describe "anyFloat"
-            [ testMinithesisCanGenerateSatisfying "NaN" F.anyFloat isNaN
-            , testMinithesisCanGenerateSatisfying "infinities" F.anyFloat isInfinite
+        , describe "reallyAnyFloat"
+            [ testMinithesisCanGenerateSatisfying "NaN" F.reallyAnyFloat isNaN
+            , testMinithesisCanGenerateSatisfying "infinities" F.reallyAnyFloat isInfinite
             , testMinithesis "Full range"
-                (F.anyFloat |> F.filter (\f -> not (isInfinite f || isNaN f)))
+                (F.reallyAnyFloat |> F.filter (\f -> not (isInfinite f || isNaN f)))
                 (\f -> f >= -1.7976931348623157e308 && f <= 1.7976931348623157e308)
                 Passes
             ]
         , describe "floatWith"
             [ testMinithesisCanGenerateSatisfying "NaN if allowNaN = True"
                 (F.tuple3
-                    (F.maybe F.anyNumericFloat)
-                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyFloat)
+                    (F.maybe F.anyFloat)
                     F.bool
                     |> F.andThen
                         (\( min, max, infinities ) ->
@@ -371,8 +379,8 @@ fuzzers =
                 isNaN
             , testMinithesisCannotGenerateSatisfying "NaN if allowNaN = False"
                 (F.tuple3
-                    (F.maybe F.anyNumericFloat)
-                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyFloat)
+                    (F.maybe F.anyFloat)
                     F.bool
                     |> F.andThen
                         (\( min, max, infinities ) ->
@@ -387,8 +395,8 @@ fuzzers =
                 isNaN
             , testMinithesisCanGenerateSatisfying "infinities if allowInfinities = True"
                 (F.tuple3
-                    (F.maybe F.anyNumericFloat)
-                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyFloat)
+                    (F.maybe F.anyFloat)
                     F.bool
                     |> F.andThen
                         (\( min, max, nan ) ->
@@ -403,8 +411,8 @@ fuzzers =
                 isInfinite
             , testMinithesisCannotGenerateSatisfying "infinities if allowInfinities = False"
                 (F.tuple3
-                    (F.maybe F.anyNumericFloat)
-                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyFloat)
+                    (F.maybe F.anyFloat)
                     F.bool
                     |> F.andThen
                         (\( min, max, nan ) ->
@@ -428,7 +436,7 @@ fuzzers =
                 (\f -> f >= -1.7976931348623157e308 && f <= 1.7976931348623157e308)
                 Passes
             , testMinithesis "min works"
-                (F.anyNumericFloat
+                (F.anyFloat
                     |> F.andThen
                         (\min ->
                             F.tuple
@@ -459,7 +467,7 @@ fuzzers =
                 (\( min, f ) -> f >= min)
                 Passes
             , testMinithesis "max works"
-                (F.anyNumericFloat
+                (F.anyFloat
                     |> F.andThen
                         (\max ->
                             F.tuple
@@ -491,8 +499,8 @@ fuzzers =
                 Passes
             , testMinithesisCanGenerateSatisfying "NaN with min/max = Just"
                 (F.tuple
-                    (F.maybe F.anyNumericFloat)
-                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyFloat)
+                    (F.maybe F.anyFloat)
                     |> F.andThen
                         (\( min, max ) ->
                             F.floatWith
@@ -506,8 +514,8 @@ fuzzers =
                 isNaN
             , testMinithesisCanGenerateSatisfying "infinities with min/max = Just"
                 (F.tuple
-                    (F.maybe F.anyNumericFloat)
-                    (F.maybe F.anyNumericFloat)
+                    (F.maybe F.anyFloat)
+                    (F.maybe F.anyFloat)
                     |> F.andThen
                         (\( min, max ) ->
                             F.floatWith
@@ -899,7 +907,7 @@ fuzzers =
             ]
         , describe "uniqueList"
             [ testMinithesis "elements are unique"
-                (F.uniqueList F.anyInt)
+                (F.uniqueList F.reallyAnyInt)
                 (\list -> Set.size (Set.fromList list) == List.length list)
                 Passes
             ]
@@ -910,7 +918,7 @@ fuzzers =
                         (\length ->
                             F.tuple
                                 (F.constant length)
-                                (F.uniqueListOfLength length F.anyInt)
+                                (F.uniqueListOfLength length F.reallyAnyInt)
                         )
                 )
                 (\( length, list ) -> List.length list == length)
@@ -1014,7 +1022,7 @@ fuzzers =
             ]
         , describe "uniqueByList"
             [ testMinithesis "elements are unique by the key"
-                (F.uniqueByList (modBy 2) F.anyInt)
+                (F.uniqueByList (modBy 2) F.reallyAnyInt)
                 (\list ->
                     Set.size (Set.fromList (List.map (modBy 2) list))
                         == List.length list
@@ -1028,7 +1036,10 @@ fuzzers =
                         (\length ->
                             F.tuple
                                 (F.constant length)
-                                (F.uniqueByListOfLength length (modBy 2) F.anyInt)
+                                (F.uniqueByListOfLength length
+                                    (modBy 2)
+                                    F.reallyAnyInt
+                                )
                         )
                 )
                 (\( length, list ) -> List.length list == length)
@@ -1145,14 +1156,15 @@ fuzzers =
 shrinkers : Test
 shrinkers =
     describe "Shrinkers"
-        [ testMinithesis "Able to reduce additive pairs"
+        [ testMinithesisShrinksTowards "Able to reduce additive pairs"
+            ( 1, 1000 )
             (F.tuple
                 (F.int 0 1000)
                 (F.int 0 1000)
             )
             (\( m, n ) -> m + n <= 1000)
-            (FailsWith ( 1, 1000 ))
-        , testMinithesis "Able to reduce lists written in a 'length first' way"
+        , testMinithesisShrinksTowards "Able to reduce lists written in a 'length first' way"
+            [ 1001 ]
             (F.int 0 10
                 |> F.andThen
                     (\length ->
@@ -1170,7 +1182,13 @@ shrinkers =
                     )
             )
             (\list -> List.sum list <= 1000)
-            (FailsWith [ 1001 ])
+        , describe "Shrinks towards"
+            [ describe "int"
+                [ testMinithesisShrinksTowards "zero 1" 0 (F.int 0 10) (\x -> x > 5)
+                , testMinithesisShrinksTowards "zero 2" 0 (F.int -10 10) (\x -> x > 5)
+                , testMinithesisShrinksTowards "zero 3" 0 (F.int -10 0) (\x -> x > 5)
+                ]
+            ]
         , shrinkingChallenges
         ]
 
@@ -1240,30 +1258,38 @@ challengeBound5 =
                     boundedList
                 )
     in
-    testMinithesis "Bound 5"
-        tuple5
-        (\( a, b, ( c, d, e ) ) -> i16Sum (List.fastConcat [ a, b, c, d, e ]) < 5 * 256)
-        (FailsWith ( [ -31488 ], [ -32768 ], ( [], [], [] ) ))
+    skip <|
+        testMinithesisShrinksTowards
+            "Bound 5"
+            {- TODO this and ([-32768],[-31488],([],[],[])) both always appear in
+               the test results... can we somehow shrink down to
+               `([-32768],[-1],([],[],[]))` or at least to one of the two?
+            -}
+            ( [ -31488 ], [ -32768 ], ( [], [], [] ) )
+            tuple5
+            (\( a, b, ( c, d, e ) ) -> i16Sum (List.fastConcat [ a, b, c, d, e ]) < 5 * 256)
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md>
 -}
 challengeReverse : Test
 challengeReverse =
-    testMinithesis "Reverse"
-        (F.list F.anyNumericInt)
+    testMinithesisShrinksTowards
+        "Reverse"
+        [ 1, 0 ]
+        (F.list F.anyInt)
         (\list -> list == List.reverse list)
-        (FailsWith [ -2147483647, -2147483648 ])
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/large_union_list.md>
 -}
 challengeLargeUnionList : Test
 challengeLargeUnionList =
-    testMinithesis "Large Union List"
-        (F.list (F.list F.anyNumericInt))
+    testMinithesisShrinksTowards
+        "Large Union List"
+        [ [ 1, -1, 2, -2, 0 ] ]
+        (F.list (F.list F.anyInt))
         (\lists -> Set.size (Set.fromList (List.fastConcat lists)) <= 4)
-        (FailsWith [ [ -2147483647, -2147483646, -2147483645, -2147483644, -2147483648 ] ])
 
 
 isFailsWith : TestResult a -> Bool

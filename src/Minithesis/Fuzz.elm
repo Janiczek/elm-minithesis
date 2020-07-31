@@ -1,8 +1,8 @@
 module Minithesis.Fuzz exposing
     ( Fuzzer, example, exampleWithSeed, generate, generateWithSeed
     , bool, weightedBool
-    , int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
-    , float, anyNumericFloat, anyFloat, floatWith, probability
+    , int, anyInt, reallyAnyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
+    , float, anyFloat, reallyAnyFloat, floatWith, probability
     , char, charRange, anyChar
     , string, stringOfLength, stringWith
     , unit
@@ -29,9 +29,9 @@ module Minithesis.Fuzz exposing
 
 @docs bool, weightedBool
 
-@docs int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
+@docs int, anyInt, reallyAnyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
 
-@docs float, anyNumericFloat, anyFloat, floatWith, probability
+@docs float, anyFloat, reallyAnyFloat, floatWith, probability
 
 @docs char, charRange, anyChar
 
@@ -65,6 +65,7 @@ module Minithesis.Fuzz exposing
 
 -}
 
+import Bitwise
 import Char exposing (Char)
 import List.Extra
 import Minithesis.Fuzz.Float as Float
@@ -76,13 +77,13 @@ import Minithesis.TestCase as TestCase
         ( Status(..)
         , TestCase
         )
+import OurExtras.Bitwise as Bitwise
 import Random
 import Set exposing (Set)
 
 
 
 {- TODO more whitespace in string/char fuzzer?
-   TODO ints shrinking toward zero?
    TODO negative floats shrinking to positive floats?
 -}
 -- 1) UNDERLYING ABSTRACTION
@@ -197,7 +198,7 @@ It will start with the seed 0, try 100 times and then give up (so that eg.
 
 -}
 generate : Fuzzer a -> Maybe a
-generate ((Fuzzer fuzzer) as wrappedFuzzer) =
+generate (Fuzzer fuzzer) =
     let
         fallbackSeed : Random.Seed -> Random.Seed
         fallbackSeed seed =
@@ -246,7 +247,7 @@ that eg. `Fuzz.generate Fuzz.reject` won't freeze your computer).
 
 -}
 generateWithSeed : Random.Seed -> Fuzzer a -> Maybe ( a, Random.Seed )
-generateWithSeed initSeed ((Fuzzer fuzzer) as wrappedFuzzer) =
+generateWithSeed initSeed (Fuzzer fuzzer) =
     let
         fallbackSeed : Random.Seed -> Random.Seed
         fallbackSeed seed =
@@ -377,13 +378,13 @@ makeChoice n generator testCase =
 
 {-| Returns a number in the range `[0, n]` (inclusive).
 -}
-nonnegativeInt_ : Int -> Fuzzer Int
-nonnegativeInt_ n =
-    Fuzzer (makeChoice n (nonnegativeIntGenerator n))
+internalInt : Int -> Fuzzer Int
+internalInt n =
+    Fuzzer (makeChoice n (internalIntGenerator n))
 
 
-nonnegativeIntGenerator : Int -> Random.Generator Int
-nonnegativeIntGenerator n =
+internalIntGenerator : Int -> Random.Generator Int
+internalIntGenerator n =
     Random.int 0 n
 
 
@@ -477,39 +478,108 @@ bool =
     oneOfValues [ True, False ]
 
 
+{-| -1073741823 (`-(2^31 - 1)`)
+-}
+minInt : Int
+minInt =
+    -1073741823
+
+
+{-| 1073741823 (`2^31 - 1`)
+-}
+maxInt : Int
+maxInt =
+    1073741823
+
+
 {-| Returns an `Int` in the range `[from, to]` (inclusive).
 
 The range of supported values is
-`[Random.minInt = -2147483648, Random.maxInt = 2147483647]`.
+`[minInt = -1073741823, maxInt = 1073741823]`.
 
      Fuzz.example (Fuzz.int -4 5)
      -->
-     [5,4,1,5,-4,5,3,2,-2,-1]
+     [-3,-1,-1,-1,2,-2,5,3,-2,-1]
 
-Rejects `from > to`.
+Rejects if `from > to`.
 
 -}
 int : Int -> Int -> Fuzzer Int
 int from to =
-    -- TODO make it shrink towards zero by using `oneOf [map negate ..., ...]`?
     if from > to then
         reject
 
+    else if from <= minInt then
+        if to >= maxInt then
+            anyInt
+
+        else if to > 0 then
+            anyInt
+                |> filter (\x -> x <= to)
+
+        else
+            anyInt
+                |> map (\x -> to - abs x)
+
+    else if to >= maxInt then
+        if from < 0 then
+            anyInt
+                |> filter (\x -> x >= from)
+
+        else
+            anyInt
+                |> map (\x -> from + abs x)
+
+    else if from == to then
+        {- TODO what about Hypothesis' boundedInt where it draws and discards a
+           bit just so that a value doesn't vanish from the RandomRun?
+        -}
+        constant from
+
+    else if from >= 0 then
+        internalInt (to - from)
+            |> map (\x -> x + from)
+
+    else if to <= 0 then
+        internalInt (to - from)
+            -- this `negate` shrinks towards 0
+            |> map (\x -> negate (to + x))
+
     else
-        nonnegativeInt_ (to - from)
-            |> map (\n -> n + from)
+        -- this way we'll draw 2 values but we'll shrink toward 0
+        oneOf
+            [ int 0 to
+            , int from 0
+            ]
 
 
-{-| Ranges over all `Int`s: `[-2147483648, 2147483647]`
+{-| Ranges over `Int`s: `[-1073741823, 1073741823]`
 
-     Fuzz.example Fuzz.anyNumericInt
+     Fuzz.example Fuzz.anyInt
      -->
      [40734761,724803180,183002667,-764688759,571685512,-765389879,-439862441,-1262912622,1613638464,-799330495]
 
 -}
-anyNumericInt : Fuzzer Int
-anyNumericInt =
-    int Random.minInt Random.maxInt
+anyInt : Fuzzer Int
+anyInt =
+    internalInt 2147483647
+        |> map
+            (\i ->
+                let
+                    isNegative : Bool
+                    isNegative =
+                        Bitwise.isBitSet 0 i
+
+                    num : Int
+                    num =
+                        Bitwise.shiftRightBy 1 i
+                in
+                if isNegative then
+                    negate num
+
+                else
+                    num
+            )
 
 
 {-| Ranges over all positive `Int`s: `[1, 2147483647]`
@@ -521,7 +591,8 @@ anyNumericInt =
 -}
 positiveInt : Fuzzer Int
 positiveInt =
-    int 1 Random.maxInt
+    internalInt 2147483646
+        |> map (\n -> n + 1)
 
 
 {-| Ranges over all negative `Int`s: `[-2147483648, -1]`
@@ -533,11 +604,12 @@ positiveInt =
 -}
 negativeInt : Fuzzer Int
 negativeInt =
-    int Random.minInt -1
+    internalInt 2147483647
+        |> map (\n -> negate n - 1)
 
 
-{-| Ranges over all non-positive `Int`s, notably includes zero:
-`[-2147483648, 0]`
+{-| Ranges over (almost) all non-positive `Int`s, notably includes zero:
+`[-2147483647, 0]`
 
      Fuzz.example Fuzz.nonpositiveInt
      -->
@@ -546,7 +618,8 @@ negativeInt =
 -}
 nonpositiveInt : Fuzzer Int
 nonpositiveInt =
-    int Random.minInt 0
+    internalInt 2147483647
+        |> map negate
 
 
 {-| Ranges over all non-negative `Int`s, notably includes zero:
@@ -559,7 +632,7 @@ nonpositiveInt =
 -}
 nonnegativeInt : Fuzzer Int
 nonnegativeInt =
-    int 0 Random.maxInt
+    internalInt 2147483647
 
 
 intInfinity : Int
@@ -570,20 +643,20 @@ intInfinity =
 {-| Ranges over all `Int`s: `[-2147483648, 2147483647]`
 and also the `Int` variants of `Infinity`, `-Infinity` and `NaN`.
 
-     Fuzz.example Fuzz.anyInt
+     Fuzz.example Fuzz.reallyAnyInt
      -->
      [-1490358084,-477130762,-1836545270,920695451,210873522,-1448555596,-Infinity,724803180,571685512,-1262912622]
 
 -}
-anyInt : Fuzzer Int
-anyInt =
+reallyAnyInt : Fuzzer Int
+reallyAnyInt =
     let
         intNaN : Int
         intNaN =
             round (0 / 0)
     in
     frequency
-        [ ( 10, anyNumericInt )
+        [ ( 10, anyInt )
         , ( 1, constant intInfinity )
         , ( 1, constant (negate intInfinity) )
         , ( 1, constant intNaN )
@@ -592,7 +665,7 @@ anyInt =
 
 int32 : Fuzzer Int
 int32 =
-    int 0 0xFFFFFFFF
+    internalInt 0xFFFFFFFF
 
 
 convertIntRange :
@@ -1288,7 +1361,7 @@ filter fn fuzzer =
     exprFuzzer : Fuzzer Expr
     exprFuzzer =
         Fuzz.frequency
-            [ ( 5, Fuzz.map Int Fuzz.anyNumericInt )
+            [ ( 5, Fuzz.map Int Fuzz.anyInt )
             , ( 1
               , Fuzz.map2 Plus
                     (Fuzz.lazy (\_ -> exprFuzzer))
@@ -1684,7 +1757,7 @@ The range of supported values is
      -->
      [10.857102531109948,11.046625981241649,12.03337188377019,11.097194316214258,13.94916603751272,12.261777014582641,17.359710146032608,10.673309641894395,15.926689124932718,16.9903743334244]
 
-Rejects `from > to`.
+Rejects if `from > to`.
 
 -}
 float : Float -> Float -> Fuzzer Float
@@ -1706,13 +1779,13 @@ Prefers nice non-fractional floats and shrinks to them.
 
 Also sprinkles some nasty edge-case floats in for good measure.
 
-     Fuzz.example Fuzz.anyNumericFloat
+     Fuzz.example Fuzz.anyFloat
      -->
      [-1.1,9007199254740992,2.2250738585072014e-308,-2.220446049250313e-16,627908,-3.5502481189047345e+60,-1.192092896e-7,0.00001,-10000000,-1.192092896e-7]
 
 -}
-anyNumericFloat : Fuzzer Float
-anyNumericFloat =
+anyFloat : Fuzzer Float
+anyFloat =
     anyFloatWith
         { allowNaN = False
         , allowInfinities = False
@@ -1727,13 +1800,13 @@ Prefers nice non-fractional floats and shrinks to them.
 
 Also sprinkles some nasty edge-case floats in for good measure.
 
-     Fuzz.example Fuzz.anyFloat
+     Fuzz.example Fuzz.reallyAnyFloat
      -->
      [Infinity,1.1,-1.192092896e-7,-Infinity,627908,-3.5502481189047345e+60,Infinity,-Infinity,NaN,NaN]
 
 -}
-anyFloat : Fuzzer Float
-anyFloat =
+reallyAnyFloat : Fuzzer Float
+reallyAnyFloat =
     anyFloatWith
         { allowNaN = True
         , allowInfinities = True
@@ -1887,7 +1960,7 @@ floatWith { min, max, allowNaN, allowInfinities } =
 
         ( Just min_, Nothing ) ->
             if min_ < 0 then
-                [ Just <| map abs anyNumericFloat
+                [ Just <| map abs anyFloat
                 , Just <| scaledFloat min_ -0.0
                 , if canGenerateNanOrInfiniteFloat then
                     Just <|
@@ -1904,12 +1977,12 @@ floatWith { min, max, allowNaN, allowInfinities } =
                     |> oneOf
 
             else
-                map (\f -> min_ + abs f) anyNumericFloat
+                map (\f -> min_ + abs f) anyFloat
 
         ( Nothing, Just max_ ) ->
             if max_ >= 0 then
                 [ Just <| scaledFloat 0.0 max_
-                , Just <| map (abs >> negate) anyNumericFloat
+                , Just <| map (abs >> negate) anyFloat
                 , if canGenerateNanOrInfiniteFloat then
                     Just <|
                         nanOrInfiniteFloat
@@ -1925,7 +1998,7 @@ floatWith { min, max, allowNaN, allowInfinities } =
                     |> oneOf
 
             else
-                map (\f -> max_ - abs f) anyNumericFloat
+                map (\f -> max_ - abs f) anyFloat
 
         ( Just min_, Just max_ ) ->
             if min_ > max_ then
