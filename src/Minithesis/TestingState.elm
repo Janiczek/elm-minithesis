@@ -6,6 +6,7 @@ module Minithesis.TestingState exposing
     , stopIfUnsatisfiable
     )
 
+import Dict exposing (Dict)
 import Minithesis.Fuzz.Internal as Fuzz exposing (Fuzzer)
 import Minithesis.RandomRun as RandomRun exposing (RandomRun)
 import Minithesis.Stop exposing (Stop(..))
@@ -47,6 +48,7 @@ init seed maxExamples showShrinkHistory (Test { label, userTestFn, fuzzer }) =
     , fuzzer = fuzzer
     , validTestCases = 0
     , calls = 0
+    , rejections = Dict.empty
     , bestCounterexample = Nothing
     , previousBestCounterexample = Nothing
     , shrinkHistory = []
@@ -112,6 +114,13 @@ stopIfUnsatisfiable result =
             if state.validTestCases == 0 then
                 Err
                     ( Unsatisfiable
+                        { mostCommonRejections =
+                            state.rejections
+                                |> Dict.toList
+                                |> List.sortBy Tuple.second
+                                |> List.take 3
+                                |> List.map Tuple.first
+                        }
                     , TestCase.forRun (Maybe.withDefault RandomRun.empty state.bestCounterexample)
                     )
 

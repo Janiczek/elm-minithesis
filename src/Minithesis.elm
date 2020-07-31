@@ -78,7 +78,7 @@ type TestResult a
                 , shrinkerUsed : String
                 }
         }
-    | Unsatisfiable
+    | Unsatisfiable { mostCommonRejections : List String }
     | InternalError Stop
 
 
@@ -180,8 +180,8 @@ runState state =
             |> TestingState.stopIfUnsatisfiable
             |> TestingState.shrink
       of
-        Err ( Stop.Unsatisfiable, _ ) ->
-            Unsatisfiable
+        Err ( Stop.Unsatisfiable rejections, _ ) ->
+            Unsatisfiable rejections
 
         Err ( stop, _ ) ->
             InternalError stop

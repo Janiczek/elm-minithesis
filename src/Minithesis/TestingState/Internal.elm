@@ -4,6 +4,7 @@ module Minithesis.TestingState.Internal exposing
     , runTest
     )
 
+import Dict exposing (Dict)
 import Minithesis.Fuzz.Internal exposing (Fuzzer)
 import Minithesis.RandomRun as RandomRun exposing (RandomRun)
 import Minithesis.Stop exposing (Stop(..))
@@ -23,6 +24,7 @@ type alias TestingState a =
     -- state
     , validTestCases : Int
     , calls : Int
+    , rejections : Dict String Int
     , bestCounterexample : Maybe RandomRun
     , previousBestCounterexample : Maybe RandomRun
     , shrinkHistory : List ( a, RandomRun, Maybe ShrinkCommand )
@@ -81,6 +83,22 @@ runTest testCase state =
 
                     else
                         state.shrinkHistory
+                , rejections =
+                    case testCase1.status of
+                        Invalid { rejection } ->
+                            state.rejections
+                                |> Dict.update rejection
+                                    (\maybeN ->
+                                        case maybeN of
+                                            Just n ->
+                                                Just (n + 1)
+
+                                            Nothing ->
+                                                Just 1
+                                    )
+
+                        _ ->
+                            state.rejections
             }
     in
     if state.bestCounterexample == Just testCase.prefix then

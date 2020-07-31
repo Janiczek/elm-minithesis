@@ -16,7 +16,7 @@ import Random
 type Status
     = Undecided
     | Overrun -- Test case didn't have enough data to complete
-    | Invalid -- Test case contained something that prevented completion
+    | Invalid { rejection : String } -- Test case contained something that prevented completion
     | Valid -- Test case completed just fine but was boring (typically passed test)
     | Interesting -- Test case completed and was interesting (typically didn't pass test)
 

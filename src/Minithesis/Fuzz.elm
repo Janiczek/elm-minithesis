@@ -364,7 +364,8 @@ makeChoice n generator testCase =
                         in
                         if result_ > n then
                             newTestCase
-                                |> TestCase.markStatus Invalid
+                                |> TestCase.markStatus
+                                    (Invalid { rejection = "makeChoice: bug - returned larger int than it should have" })
 
                         else
                             Ok ( result_, newTestCase )
@@ -493,7 +494,7 @@ int : Int -> Int -> Fuzzer Int
 int from to =
     -- TODO make it shrink towards zero by using `oneOf [map negate ..., ...]`?
     if from > to then
-        reject
+        reject "int: from > to"
 
     else
         internalInt (to - from)
@@ -716,7 +717,7 @@ listWith range itemFuzzer =
             convertIntRange range
     in
     if minLength > maxLength then
-        reject
+        reject "listWith: minLength > maxLength"
 
     else if maxLength <= 0 then
         constant []
@@ -935,7 +936,7 @@ uniqueByListWith toComparable range itemFuzzer =
             convertIntRange range
     in
     if minLength > maxLength then
-        reject
+        reject "uniqueByListWith: minLength > maxLength"
 
     else if maxLength <= 0 then
         constant []
@@ -1035,9 +1036,9 @@ So you can use `reject` in similar patterns as you'd do with `Json.Decode.fail`
 etc.
 
 -}
-reject : Fuzzer a
-reject =
-    Fuzzer (TestCase.markStatus Invalid)
+reject : String -> Fuzzer a
+reject reason =
+    Fuzzer (TestCase.markStatus (Invalid { rejection = reason }))
 
 
 {-| Convert a fuzzed value with a given function.
@@ -1278,7 +1279,7 @@ filter fn fuzzer =
                     constant item
 
                 else
-                    reject
+                    reject "filter"
             )
 
 
@@ -1388,8 +1389,20 @@ Rejects if `from > 0x10FFFF || to > 0x10FFFF`.
 -}
 charRange : Int -> Int -> Fuzzer Char
 charRange from to =
-    if from < 0 || to < 0 || from > to || from > maxChar || to > maxChar then
-        reject
+    if from < 0 then
+        reject "charRange: from < 0"
+
+    else if to < 0 then
+        reject "charRange: to < 0"
+
+    else if from > to then
+        reject "charRange: from > to"
+
+    else if from > maxChar then
+        reject "charRange: from > maxChar"
+
+    else if to > maxChar then
+        reject "charRange: from > maxChar"
 
     else if from == to then
         constant (Char.fromCode from)
@@ -1495,7 +1508,7 @@ oneOf : List (Fuzzer a) -> Fuzzer a
 oneOf fuzzers =
     case List.length fuzzers of
         0 ->
-            reject
+            reject "oneOf: empty list"
 
         length ->
             internalInt (length - 1)
@@ -1504,7 +1517,7 @@ oneOf fuzzers =
                         case List.head (List.drop i fuzzers) of
                             Nothing ->
                                 -- shouldn't be possible
-                                reject
+                                reject "oneOf: bug - didn't find a fuzzer in the list"
 
                             Just fuzzer ->
                                 fuzzer
@@ -1566,7 +1579,7 @@ frequency options =
                 |> List.filter (\( weight, _ ) -> weight > 0)
     in
     if List.isEmpty cleanOptions then
-        reject
+        reject "frequency: no options with weight > 0"
 
     else
         let
@@ -1596,7 +1609,11 @@ frequency options =
                     in
                     case List.Extra.find (\( weight, _ ) -> weight >= f) cumulativeOptions of
                         Nothing ->
-                            reject
+                            -- shouldn't happen
+                            {- TODO maybe we can write this manually without
+                               this impossible state
+                            -}
+                            reject "frequency: bug - didn't find a fuzzer in the list"
 
                         Just ( _, fuzzer ) ->
                             fuzzer
@@ -1836,7 +1853,7 @@ wellShrinkingFloat { allowInfinities } =
 scaledFloat : Float -> Float -> Fuzzer Float
 scaledFloat min max =
     if min > max then
-        reject
+        reject "scaledFloat: min > max"
 
     else
         probability
@@ -1940,10 +1957,19 @@ floatWith { min, max, allowNaN, allowInfinities } =
 
         ( Just min_, Just max_ ) ->
             if min_ > max_ then
-                reject
+                reject "floatWith: min_ > max_"
 
-            else if isNaN min_ || isNaN max_ || isInfinite min_ || isInfinite max_ then
-                reject
+            else if isNaN min_ then
+                reject "floatWith: min == NaN"
+
+            else if isNaN max_ then
+                reject "floatWith: max == NaN"
+
+            else if isInfinite min_ then
+                reject "floatWith: bug - min is +/- Infinity when it should be a numeric float"
+
+            else if isInfinite max_ then
+                reject "floatWith: bug - max is +/- Infinity when it should be a numeric float"
 
             else if min_ == max_ then
                 constant min_
