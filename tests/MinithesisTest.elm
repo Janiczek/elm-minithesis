@@ -8,7 +8,7 @@ import OurExtras.List as List
 import Random
 import Set
 import Shrink
-import Test exposing (Test, describe, fuzz, test, todo)
+import Test exposing (Test, describe, fuzz, skip, test, todo)
 
 
 suite : Test
@@ -1216,6 +1216,10 @@ shrinking =
                 )
                 (\i -> i > 10)
                 1
+            , testMinithesisShrinksTowards "probability, >" F.probability (\p -> p > 0.5) 0
+            , testMinithesisShrinksTowards "probability, >=" F.probability (\p -> p >= 0.5) 0
+            , testMinithesisShrinksTowards "probability, <" F.probability (\p -> p < 0.5) 0.5000000000000001
+            , testMinithesisShrinksTowards "probability, <=" F.probability (\p -> p <= 0.5) 0.5000000000000001
             ]
         , shrinkingChallenges
         ]
@@ -1243,53 +1247,54 @@ Here's an example:
 -}
 challengeBound5 : Test
 challengeBound5 =
-    let
-        bits =
-            16
+    skip <|
+        let
+            bits =
+                16
 
-        max =
-            2 ^ bits
+            max =
+                2 ^ bits
 
-        maxHalf =
-            max // 2
+            maxHalf =
+                max // 2
 
-        i16 : Int -> Int
-        i16 n =
-            ((n + maxHalf) |> modBy max) - maxHalf
+            i16 : Int -> Int
+            i16 n =
+                ((n + maxHalf) |> modBy max) - maxHalf
 
-        i16Add : Int -> Int -> Int
-        i16Add a b =
-            i16 (a + b)
+            i16Add : Int -> Int -> Int
+            i16Add a b =
+                i16 (a + b)
 
-        i16Sum : List Int -> Int
-        i16Sum ns =
-            List.foldl i16Add 0 ns
+            i16Sum : List Int -> Int
+            i16Sum ns =
+                List.foldl i16Add 0 ns
 
-        boundedList : Fuzzer (List Int)
-        boundedList =
-            F.listWith
-                { minLength = Nothing
-                , maxLength = Just 1
-                , customAverageLength = Nothing
-                }
-                (F.int -32768 32767)
-                |> F.filter (\list -> i16Sum list < 256)
+            boundedList : Fuzzer (List Int)
+            boundedList =
+                F.listWith
+                    { minLength = Nothing
+                    , maxLength = Just 1
+                    , customAverageLength = Nothing
+                    }
+                    (F.int -32768 32767)
+                    |> F.filter (\list -> i16Sum list < 256)
 
-        tuple5 : Fuzzer ( List Int, List Int, ( List Int, List Int, List Int ) )
-        tuple5 =
-            F.tuple3
-                boundedList
-                boundedList
-                (F.tuple3
+            tuple5 : Fuzzer ( List Int, List Int, ( List Int, List Int, List Int ) )
+            tuple5 =
+                F.tuple3
                     boundedList
                     boundedList
-                    boundedList
-                )
-    in
-    testMinithesisShrinksTowards "Bound 5"
-        tuple5
-        (\( a, b, ( c, d, e ) ) -> i16Sum (List.fastConcat [ a, b, c, d, e ]) < 5 * 256)
-        ( [ -31488 ], [ -32768 ], ( [], [], [] ) )
+                    (F.tuple3
+                        boundedList
+                        boundedList
+                        boundedList
+                    )
+        in
+        testMinithesisShrinksTowards "Bound 5"
+            tuple5
+            (\( a, b, ( c, d, e ) ) -> i16Sum (List.fastConcat [ a, b, c, d, e ]) < 5 * 256)
+            ( [ -31488 ], [ -32768 ], ( [], [], [] ) )
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md>
