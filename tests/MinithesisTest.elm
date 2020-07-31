@@ -16,7 +16,7 @@ suite =
     describe "Minithesis"
         [ general
         , fuzzers
-        , shrinkers
+        , shrinking
         ]
 
 
@@ -91,6 +91,19 @@ testMinithesisCannotGenerateSatisfying name fuzzer predicate =
                 |> Minithesis.run seed
                 |> Tuple.second
                 |> Expect.notEqual Passes
+
+
+testMinithesisShrinksTowards : String -> Fuzzer a -> (a -> Bool) -> a -> Test
+testMinithesisShrinksTowards name fuzzer userFn value =
+    fuzz seedFuzzer name <|
+        \seed ->
+            Minithesis.test
+                ("[" ++ name ++ "] shrinks towards " ++ Debug.toString value)
+                fuzzer
+                userFn
+                |> Minithesis.run seed
+                |> Tuple.second
+                |> Expect.equal (FailsWith value)
 
 
 general : Test
@@ -1142,17 +1155,17 @@ fuzzers =
         ]
 
 
-shrinkers : Test
-shrinkers =
-    describe "Shrinkers"
-        [ testMinithesis "Able to reduce additive pairs"
+shrinking : Test
+shrinking =
+    describe "Shrinking"
+        [ testMinithesisShrinksTowards "additive pair"
             (F.tuple
                 (F.int 0 1000)
                 (F.int 0 1000)
             )
             (\( m, n ) -> m + n <= 1000)
-            (FailsWith ( 1, 1000 ))
-        , testMinithesis "Able to reduce lists written in a 'length first' way"
+            ( 1, 1000 )
+        , testMinithesisShrinksTowards "list written in length-first way"
             (F.int 0 10
                 |> F.andThen
                     (\length ->
@@ -1170,7 +1183,40 @@ shrinkers =
                     )
             )
             (\list -> List.sum list <= 1000)
-            (FailsWith [ 1001 ])
+            [ 1001 ]
+        , describe "Fuzzers"
+            [ testMinithesisShrinksTowards "oneOf"
+                (F.oneOf
+                    [ F.constant 1
+                    , F.constant 2
+                    , F.constant 3
+                    ]
+                )
+                (\i -> i > 10)
+                1
+            , testMinithesisShrinksTowards "oneOfValues"
+                (F.oneOfValues [ 1, 2, 3 ])
+                (\i -> i > 10)
+                1
+            , testMinithesisShrinksTowards "frequency"
+                (F.frequency
+                    [ ( 1, F.constant 1 )
+                    , ( 2, F.constant 2 )
+                    , ( 3, F.constant 3 )
+                    ]
+                )
+                (\i -> i > 10)
+                1
+            , testMinithesisShrinksTowards "frequencyValues"
+                (F.frequencyValues
+                    [ ( 1, 1 )
+                    , ( 2, 2 )
+                    , ( 3, 3 )
+                    ]
+                )
+                (\i -> i > 10)
+                1
+            ]
         , shrinkingChallenges
         ]
 
@@ -1240,30 +1286,30 @@ challengeBound5 =
                     boundedList
                 )
     in
-    testMinithesis "Bound 5"
+    testMinithesisShrinksTowards "Bound 5"
         tuple5
         (\( a, b, ( c, d, e ) ) -> i16Sum (List.fastConcat [ a, b, c, d, e ]) < 5 * 256)
-        (FailsWith ( [ -31488 ], [ -32768 ], ( [], [], [] ) ))
+        ( [ -31488 ], [ -32768 ], ( [], [], [] ) )
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/reverse.md>
 -}
 challengeReverse : Test
 challengeReverse =
-    testMinithesis "Reverse"
+    testMinithesisShrinksTowards "Reverse"
         (F.list F.anyNumericInt)
         (\list -> list == List.reverse list)
-        (FailsWith [ -2147483647, -2147483648 ])
+        [ -2147483647, -2147483648 ]
 
 
 {-| <https://github.com/jlink/shrinking-challenge/blob/main/challenges/large_union_list.md>
 -}
 challengeLargeUnionList : Test
 challengeLargeUnionList =
-    testMinithesis "Large Union List"
+    testMinithesisShrinksTowards "Large Union List"
         (F.list (F.list F.anyNumericInt))
         (\lists -> Set.size (Set.fromList (List.fastConcat lists)) <= 4)
-        (FailsWith [ [ -2147483647, -2147483646, -2147483645, -2147483644, -2147483648 ] ])
+        [ [ -2147483647, -2147483646, -2147483645, -2147483644, -2147483648 ] ]
 
 
 isFailsWith : TestResult a -> Bool
