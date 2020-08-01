@@ -122,7 +122,7 @@ shrink : List Int -> LazyList (List Int) -- shrinks all fuzzers automatically,
                                          -- can't be configured
 ```
 
-A very cool consequence of the above is is that it mostly sidesteps the issue
+A very cool consequence of the above is that it mostly sidesteps the issue
 most other property-based testing libraries have: `andThen` (monadic bind). More
 specifically, QuickCheck-like libraries either don't expose `andThen` at all (as
 is the case with Elm), or struggle with making the shrunk values satisfy the
