@@ -1,5 +1,5 @@
 module Minithesis.Fuzz exposing
-    ( Fuzzer, example, exampleWithSeed, generate, generateWithSeed
+    ( Fuzzer, generate, generateWithSeed
     , bool, weightedBool
     , int, anyNumericInt, anyInt, positiveInt, negativeInt, nonpositiveInt, nonnegativeInt
     , float, anyNumericFloat, anyFloat, floatWith, probability
@@ -22,7 +22,7 @@ module Minithesis.Fuzz exposing
 
 # The basics
 
-@docs Fuzzer, example, exampleWithSeed, generate, generateWithSeed
+@docs Fuzzer, generate, generateWithSeed
 
 
 # Values
@@ -97,97 +97,6 @@ random numbers and try generating a new value from them.
 -}
 type alias Fuzzer a =
     Internal.Fuzzer a
-
-
-{-| Shows 10 examples of randomly generated values from the given fuzzer, with
-0 as the PRNG seed.
-
-     Fuzz.example (Fuzz.uniqueList (Fuzz.int 1 3))
-     -->
-     [[1],[3],[],[3],[],[],[3],[3,2],[3],[1,3,2]]
-
--}
-example : Fuzzer a -> List a
-example fuzzer =
-    exampleWithSeed 0 fuzzer
-
-
-{-| Shows 10 examples of randomly generated values from the given fuzzer, with
-the given PRNG seed.
-
-Useful for quick sanity checks in the REPL:
-
-     Fuzz.uniqueList (Fuzz.int 1 3) |> Fuzz.exampleWithSeed 0
-     -->
-     [[1],[3],[],[3],[],[],[3],[3,2],[3],[1,3,2]]
-
-
-     Fuzz.uniqueList (Fuzz.int 1 3) |> Fuzz.exampleWithSeed 1
-     -->
-     [[1,3],[3,2],[],[],[],[1],[],[3],[3,1],[2]]
-
-
-     Fuzz.uniqueList (Fuzz.int 1 3) |> Fuzz.exampleWithSeed 2
-     -->
-     [[],[1],[2,1],[],[2],[1],[1,2],[3,1],[3,1],[]]
-
--}
-exampleWithSeed : Int -> Fuzzer a -> List a
-exampleWithSeed seedInt (Fuzzer fn) =
-    let
-        fallbackSeed : Random.Seed -> Random.Seed
-        fallbackSeed seed =
-            seed
-                |> Random.step (Random.constant ())
-                |> Tuple.second
-
-        nextSeed : Random.Seed -> Maybe Random.Seed -> Random.Seed
-        nextSeed previousSeed maybeNextSeed =
-            case maybeNextSeed of
-                Just seed ->
-                    seed
-
-                Nothing ->
-                    fallbackSeed previousSeed
-
-        go : Int -> Int -> Random.Seed -> List a -> List a
-        go tries i seed acc =
-            if tries <= 0 then
-                -- unsuccessful, perhaps it rejects too much
-                go
-                    100
-                    (i - 1)
-                    seed
-                    acc
-
-            else if i <= 0 then
-                acc
-
-            else
-                case
-                    fn
-                        (TestCase.init
-                            { seed = seed
-                            , maxSize = 100
-                            , prefix = RandomRun.empty
-                            }
-                        )
-                of
-                    Ok ( value, testCase ) ->
-                        go
-                            100
-                            (i - 1)
-                            (nextSeed seed testCase.seed)
-                            (value :: acc)
-
-                    Err ( _, testCase ) ->
-                        go
-                            (tries - 1)
-                            i
-                            (nextSeed seed testCase.seed)
-                            acc
-    in
-    go 100 10 (Random.initialSeed seedInt) []
 
 
 {-| Make the fuzzer generate an example.
