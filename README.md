@@ -1,3 +1,11 @@
+# IMPORTANT:
+
+See also :sparkles:
+[`elm-microthesis`](https://github.com/Janiczek/elm-microthesis) :sparkles: (and
+its various branches/tags) which is more Elm-idiomatic implementation of the
+same ideas. The repo you are currently viewing is a more direct port of the
+Python Minithesis idea. Read below.
+
 # `elm-minithesis`
 
 `elm-minithesis` is a property-based testing library based on [Minithesis](https://github.com/drmaciver/minithesis), which is the minimal implementation of the core idea of [Hypothesis](https://github.com/HypothesisWorks/hypothesis).
