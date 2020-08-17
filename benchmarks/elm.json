@@ -1,9 +1,8 @@
 {
     "type": "application",
     "source-directories": [
-        "src",
-        "../_helpers",
-        "../../../src"
+        ".",
+        "../src"
     ],
     "elm-version": "0.19.1",
     "dependencies": {
@@ -14,8 +13,7 @@
             "elm/random": "1.0.0",
             "elm-community/array-extra": "2.3.0",
             "elm-community/list-extra": "8.2.4",
-            "elm-explorations/benchmark": "1.0.1",
-            "elm-explorations/test": "1.2.2"
+            "elm-explorations/benchmark": "1.0.1"
         },
         "indirect": {
             "BrianHicks/elm-trend": "2.1.3",
